@@ -56,13 +56,13 @@ Additional work is assigned in case more than 2 classes are missed (even in case
 
 ## Conceptually, Bayesian models are simple
 
-Posterior probability $\propto$ Data probability $\times$ Prior probability
+Posterior probability $\propto$ Data given hypothesis $\times$ Prior probability
 
 ## Conceptually, Bayesian models are simple, example 
 
 - A researcher is interested in differences in empathy between men and women. No past research examined this relationship.
 - The researcher believes that the hypothesis that men are more empathic than women is just as likely as the hypothesis that women are more empathic than men (**prior**).
-- Then the researcher conduct a study, and finds that in the collected sample women score higher on the empathy measures than men (**data**).
+- Then the researcher conduct a study, and finds that in the collected sample women score higher on the empathy measures than men (**data given hypothesis**).
 - The researcher updates his/her belief, and now finds hypothesis that women are more empathic than men more likely than the reverse (**posterior**).
 
 ## Critical differences between Bayesian and Non-Bayesians: *Fixed/Variable*
@@ -99,6 +99,38 @@ ggplot(aes(x))+
 - **Frequentists:** Probability is observed result from an infinite series of trials performed under identical conditions.
 
 - **Bayesians:** Probability is the researcher 'degree of belief' before or after the data are observed.
+
+## Critical differences between Bayesian and Non-Bayesians: *Interpretation of probability*
+
+```{r}
+trials <- c(-1,0,0,1,1,1,2,2,2,2,3,3,3,3,4,4,4,5,5,6)
+trials %>% 
+  enframe() %>% 
+  ggplot(aes(trials))+
+  geom_dotplot(alpha = 1/4)+
+  geom_point(data=data.frame(x=2,y=0.026), aes(x,y), size=5)+
+  labs(x="Difference between men and women")+
+  scale_x_continuous(breaks =-1:6)+
+  ggpubr::theme_pubr()+
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank())
+```
+
+## Critical differences between Bayesian and Non-Bayesians: *Interpretation of probability*
+
+```{r}
+trials <- -1:6
+
+trials %>% 
+  enframe() %>% 
+  mutate(prob = dnorm(trials, 2.5, 1)) %>% 
+  ggplot(aes(trials, prob))+
+  geom_bar(stat="identity", width= 0.2)+
+  labs(x="Difference between men and women", y="Probability")+
+  scale_x_continuous(breaks =-1:6)+
+  scale_y_continuous(limits = 0:1)+
+  ggpubr::theme_pubr()
+```
 
 ## Critical differences between Bayesian and Non-Bayesians: *Model summaries*
 
@@ -243,6 +275,30 @@ plot(bf)+
 
 - **Bayesians:** Posterior predictive checks. Sensitivity to forms of the prior. Bayes factors, information criteria (DIC, WAIC, LOOIC).
 
+## Reasons NOT to use Bayesian inference
+
+- The population parameters are truly fixed and unchanging under realistic circumstances
+- We care more about "significance" than effect size
+- Computers are slow and rarely available
+- We want automated, "cookbook" type procedures
+
+## Reasons to use Bayesian inference
+
+- We want to be very careful about stipulating assumptions and are willing to defend them.
+- We view the world probabilistically, rather than as a set of fixed phenomena that are known or unknown.
+- Every statistical model ever created in the history of human kind is subjective; we are willing to admit it.
+- Prior information abound in the social sciences and it is important and helpful to use it.
+
+## When Bayesian inference is extremely useful
+
+- We have small sample sizes, with a lot of noise.
+- Populations we sample from have complex, hierarchical structure (e.g. students within classes, classes within schools, schools within districts, etc.).
+- We want to account for various sources of uncertainty (missing data, measurement errors, violated assumptioms, e.g. non-homogeneous variances, non-normal distribution of response variable, autocorrelation of residuals).
+- We are trying to replicate previously observed results.
+- We want to estimate whether our study supports hypothesis of no differnce (or zero correlation).
+- We want to use our models not only for inference, but also for prediction.
+
+
 ## Software for Bayesian modeling
 
 - Majority of contemporary software offer functionalities for Baysian analysis
@@ -261,24 +317,24 @@ plot(bf)+
 
 ## Books on Bayesian analysis
 
-![](stat_reth.jpg)
+![](figures/stat_reth.jpg)
 
 
 ## Books on Bayesian analysis
 
-![](dbda2.jpg)
+![](figures/dbda2.jpg)
 
 ## Books on Bayesian analysis
 
-![](bda3.jpg)
+![](figures/bda3.jpg)
 
 ## Books on Bayesian analysis
 
-![](gill.jpg)
+![](figures/gill.jpg)
 
 ## Books on Bayesian analysis
 
-![](bcm.jpg)
+![](figures/bcm.jpg)
 
 ## Online resources:
 
