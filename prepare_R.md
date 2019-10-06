@@ -6,7 +6,7 @@ To complete most of the assignments you should make sure you have installed requ
 2. The packages we will use require C++ compiler. Depending on your operating system:
 - Windows: Install the recommended version of Rtools: [here](https://cran.rstudio.com/bin/windows/Rtools/).
 - macOS: Open the Terminal, type `xcode-select --install`, press Install, and follow further instructions.
-- Linux: Depend on the distribution, but you should probably have all the tools you need.
+- Linux: It depends on the distribution, but most likely you have all the tools you need.
 3. I strongly recommend to install the latest RStudio: [here](https://rstudio.com/products/rstudio/download/).
 4. Open RStudio and install the required packages with this commands:
 ```

@@ -1,0 +1,115 @@
+---
+title: "Class 1: Models in science"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F, fig.width = 6, fig.height = 4)
+```
+
+## Typology of statistics
+
+- **Frequentists:** From Neyman, Pearson, Wald. An approach you learned during basic statistics course. Is based on an imaginary sampling distributions and sharp decisiton rules (NHST = Null Hypothesis Significance Testing).
+
+- **Bayesians:** From Bayes/Laplace/de Finetti. An approach that recently gains increasing popularity. Is based on an assumption that our knowledge regarding parameters in uncertain and can be always updated by new data. 
+
+## Critical differences between Bayesian and Non-Bayesians: *Fixed/Variable*
+
+- **Frequentists:** Data are random IID sample from a continuous stream, but parameters are fixed.
+
+- **Bayesians:** Data are observed and therefore fixed, but parameters are unknown and described distributionally.
+
+## Critical differences between Bayesian and Non-Bayesians: *Fixed/Variable*
+
+```{r}
+library(tidyverse)
+tibble(x = 5.4) %>% 
+ggplot(aes(x))+
+  geom_vline(aes(xintercept=x), size=2, colour = 'lightblue')+
+  labs(x='Difference between men and women')+
+  scale_x_continuous(limits = c(3,8))+
+  ggpubr::theme_pubr()
+```
+
+## Critical differences between Bayesian and Non-Bayesians: *Fixed/Variable*
+
+```{r}
+tibble(x = rnorm(100, 5.4, 0.4)) %>% 
+ggplot(aes(x))+
+  geom_density(fill = 'lightblue')+
+  labs(x='Difference between men and women', y = 'Density')+
+  scale_x_continuous(limits = c(3,8))+
+  ggpubr::theme_pubr()
+```
+
+## Critical differences between Bayesian and Non-Bayesians: *Interpretation of probability*
+
+- **Frequentists:** Probability is observed result from an infinite series of trials performed under identical conditions.
+
+- **Bayesians:** Probability is the researcher 'degree of belief' before or after the data are observed.
+
+## Critical differences between Bayesian and Non-Bayesians: *Model summaries*
+
+- **Frequentists:** Point estimates and standard errors. Confidence intervals: 95% CI indicating that 19/20 times intervals covers the true parameter value.
+
+- **Bayesians:** Various ways of describing posterior distribution (means, medians, quantiles). Credible intervals, HPDIs (highest posterior density intervals).
+
+## Critical differences between Bayesian and Non-Bayesians: *Model summaries*
+
+```{r}
+genSE <- function(n = 100, mu = 2, sd = 1) {
+  x = rnorm(n, mu, sd)
+  m = mean(x)
+  se = sd(x)/sqrt(n)
+  list(m, se)
+}
+set.seed(345)
+result <- unlist(replicate(20, genSE(),simplify = T))
+result <- as_tibble(matrix(result, nrow=20, byrow = T))
+colnames(result) <- c('M','SE')
+
+result %>% 
+  rownames_to_column() %>% 
+  rename(replication = rowname) %>% 
+  mutate(replication = as.numeric(replication)) %>% 
+  mutate(lower = M - 1.96*SE, upper = M + 1.96*SE) %>% 
+  ggplot(aes(x=M, y=replication))+
+  geom_vline(xintercept = 2, colour='lightblue')+
+  geom_point()+
+  geom_segment(aes(y=replication, yend=replication,
+                   x = lower, xend = upper))+
+  scale_y_continuous(breaks=1:20)+
+  labs(x='Difference between men and women')+
+  ggtitle('Replication means and 95% confidence intervals')+
+  ggpubr::theme_pubr()
+```
+
+## Critical differences between Bayesian and Non-Bayesians: *Model summaries*
+
+```{r}
+x = rnorm(200, 2, 1/sqrt(100))
+
+tibble(y="HPDI",
+       l1 = quantile(x, probs = 0.025),
+       l2 = quantile(x, probs = 0.10),
+       l3 = quantile(x, probs = 0.33),
+       l4 = quantile(x, probs = 0.66),
+       l5 = quantile(x, probs = 0.90),
+       l6 = quantile(x, probs = 0.975)) %>% 
+  ggplot()+
+  geom_segment(aes(y=y, yend=y,
+                   x = l1, xend = l6,
+                   colour = "95%"), size = 3, lineend = "round")+
+  geom_segment(aes(y=y, yend=y,
+                 x = l2, xend = l5,
+                 colour = "90%"), size = 3, lineend = "round")+
+  geom_segment(aes(y=y, yend=y,
+                 x = l3, xend = l4,
+                 colour = "66%"), size = 3, lineend = "round")+
+  labs(x='Difference between men and women', y="",
+       colour="")+
+  ggtitle('Bayesian Intervals')+
+  scale_color_brewer(palette = "Set2")+
+  ggpubr::theme_pubr()
+```
+
