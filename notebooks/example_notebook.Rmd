@@ -5,6 +5,10 @@ output:
   html_notebook: default
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
 # Loading packages 
 
 The very first thing that you would like to do is loading the required R libraries.
