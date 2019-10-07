@@ -1,0 +1,128 @@
+---
+title: "Example R notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Loading packages 
+
+The very first thing that you would like to do is loading the required R libraries.
+Lets check whether you have successfully installed all the packages.
+
+```{r}
+library(tidyverse)
+library(emmeans)
+library(brms)
+library(tidybayes)
+library(bayestestR)
+```
+
+You will probably see some start message, and several warnings. If you don't see any errors, then with 99% you are probably fine with this step.
+
+# Obtaining the dataset.
+
+Most of the datasets will be availabe through the course online repository (or some other repositories). 
+Lets try to get the example dataset.
+
+```{r}
+library(foreign)
+crime_data <- read.dta("https://stats.idre.ucla.edu/stat/data/crime.dta")
+```
+
+# Initial lookup at the data
+
+There are several ways to look at the dataset. Lets try a simple `glimpse`.
+
+```{r}
+crime_data %>% 
+  glimpse()
+```
+
+# Plotting some of the distributions.
+
+We are interested in the crime level through states. Lets plot a simple histogram.
+
+```{r}
+crime_data %>% 
+  ggplot(aes(crime)) +
+  geom_histogram()
+```
+
+The distribution looks fine appart from a single outlier.
+Lets plot one the predictors of crime - poverty.
+
+```{r}
+crime_data %>% 
+  ggplot(aes(poverty)) +
+  geom_histogram()
+```
+
+Now lets plot crime against poverty.
+
+```{r}
+crime_data %>% 
+  ggplot(aes(poverty, crime)) +
+  geom_point()
+```
+
+
+# Creating a simple Bayesian regression model.
+
+Lets fit crime against poverty. This is your `Hello world!` to Bayesian modelling.
+Don't worry if you don't understand what you are doing or what is happening. This just a quick intro to get you the feeling of how we will work through the course. 
+
+```{r}
+fit <- brm(crime ~ poverty,
+           data = crime_data,
+           prior = prior(normal(0, 10), class = b))
+```
+
+
+# Summarising our results
+
+Lets summarise our results.
+
+```{r}
+fit
+```
+
+It seems like poverty is positively and reliably associated with crime level (at the state level).
+
+# Plotting our posterior.
+
+Lets see to what extent the obtained posterior distribution supports positive association.
+
+```{r}
+pd_fit <- p_direction(fit)
+plot(pd_fit)
+```
+
+# Plotting posterior against prior
+
+Now lets compare posterior distribution to prior distribution.
+
+```{r}
+bf_fit <- bayesfactor_parameters(fit)
+plot(bf_fit)
+```
+
+# Plotting predictions against data
+
+Now lets plot the fitted regression line against the collected data.
+
+```{r}
+marginal_effects(fit, effects = "poverty") %>% 
+  plot(points = T)
+```
+
+If you would like to fit predicted crime level given the poverty level it is also quite simple.
+
+```{r}
+marginal_effects(fit, effects = "poverty", method = "predict") %>% 
+  plot(points = T)
+```
+
+If you find the code in this notebook hard to follow, DON'T PANIC. It will get easier with time.
+I would also recommend you to go through some online tutorials. For example Hadley Wickham's [R for Data Science](https://r4ds.had.co.nz/).
+
