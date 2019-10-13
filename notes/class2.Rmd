@@ -1,0 +1,210 @@
+---
+title: "Class 2: Bayes theorem and Bayesian updating"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F, fig.width = 6, fig.height = 4)
+```
+
+## Bayes theorem
+
+$$Pr(A | B) = \frac{Pr(B | A) \times Pr(A)}{Pr(B)}$$
+
+## Bayes theorem
+
+- Suppose there is a test for vampirism that correctly detects vampirism in 90% of cases, i.e. given that you test a vampire, in 95 out of 100 cases it will return positive result.
+- The test has some flows, because it can also return positive result when given to a human. Luckilly, the chance of such a result is small, 20%, i.e. given that you test a human in 10 out of 100 cases it will return positive result.
+- We also know that vampires are quire rare, there is only 1 in 100 individuals.
+- What is the chance that someone you tested and who obtained positive test result is a vampire.
+
+## Bayes theorem
+
+- $Pr(positive | vampire) = .90$ and this implies $Pr(negative | vampire) = .10$
+- $Pr(positive | human) = .10$ and this implies $Pr(negative | human) = .90$ 
+- $Pr(vampire) = .01$, and this implies $Pr(human) = .99$
+- $Pr(vampire | positive) = ...$
+
+## Bayes theorem
+
+$$Pr(vampire | positive) = \frac{Pr(positive | vampire) \times Pr(vampire)}{Pr(positive)}$$
+
+$Pr(positive) = ???$
+
+## Bayes theorem
+
+- How frequently the test will return positive result?
+- Suppose you give a test to 1000 individuals:
+  - If $Pr(vampire) = .10$, then 10 will be vampires, and 990 will be humans.
+  - If $Pr(positive | vampire) = .90$, then among 10 vampires, you obtain 9 positive results.
+  - If $Pr(positive | human) = .10$, then among 990 humans, you obtain 99 positive resutls.
+  - In sum you will obtain 108 positive results out of 1000 tests. Then $Pr(positive) = .108$
+
+## Bayes theorem 
+
+- In mathematical notation you can write the formula for faster computation.
+
+$$Pr(p.) = [Pr(p. | v.) \times Pr(v.)] + [Pr(p. | h.) \times Pr(h.)]$$
+
+## Bayes theorem
+
+$$Pr(v. | p.) = \frac{Pr(p. | v.) \times Pr(v.)}{[Pr(p. | v.) \times Pr(v.)] + [Pr(p. | h.) \times Pr(h.)]}$$
+
+## Bayes theorem
+
+$Pr(vampire | positive) = \frac{.90 \times .01}{[.90 \times .01] + [.10 \times .99]}$
+
+$Pr(vampire | positive) = \frac{.90 \times .01}{.108}$
+
+$Pr(vampire | positive) = \frac{.90 \times .01}{.108}$
+
+$Pr(vampire | positive) = .0833$ 
+
+## Your turn
+
+
+
+## Bayes theorem
+
+$$Posterior = \frac{Likelihood \times Prior}{Average Likelihood}$$
+
+## Bayesian updating
+
+- Suppose you have build a perfect detector of vampires.
+- You start examining randomly encountered people.
+  - What is a random sample?
+- You have obtained a sample of 10 independent records.
+  - What is the definition of independent records?
+- Vampire, Human, Human, Vampire, Human, Human, Human, Human, Human, Human
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 1,1), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 2,1), size=1.5, linetype=1)+
+  ggtitle("V")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 2,1), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 2,2), size=1.5, linetype=1)+
+  ggtitle("V H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 2,2), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 2,3), size=1.5, linetype=1)+
+  ggtitle("V H H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 2,3), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 3,3), size=1.5, linetype=1)+
+  ggtitle("V H H V")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 3,3), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 3,4), size=1.5, linetype=1)+
+  ggtitle("V H H V H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 3,4), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 3,5), size=1.5, linetype=1)+
+  ggtitle("V H H V H H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 3,5), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 3,6), size=1.5, linetype=1)+
+  ggtitle("V H H V H H H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 3,6), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 3,7), size=1.5, linetype=1)+
+  ggtitle("V H H V H H H H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 3,7), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 3,8), size=1.5, linetype=1)+
+  ggtitle("V H H V H H H H H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
+
+## Bayesian updating
+
+```{r}
+library(tidyverse)
+ggplot(data.frame(p = seq(0,1, length.out = 100)), aes(x=p))+
+  stat_function(fun = function(x) dbeta(x, 3,8), size=1.5, linetype=2)+
+  stat_function(fun = function(x) dbeta(x, 3,9), size=1.5, linetype=1)+
+  ggtitle("V H H V H H H H H H")+
+  labs(y="Plausibility",x="Proportion of vampires")+
+  ggpubr::theme_pubr()+
+  theme(axis.text.y = element_blank())
+```
