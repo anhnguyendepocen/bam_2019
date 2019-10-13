@@ -14,9 +14,9 @@ $$Pr(A | B) = \frac{Pr(B | A) \times Pr(A)}{Pr(B)}$$
 ## Bayes theorem
 
 - Suppose there is a test for vampirism that correctly detects vampirism in 90% of cases, i.e. given that you test a vampire, in 90 out of 100 cases it will return positive result.
-- The test has some flows, because it can also return positive result when given to a human. Luckilly, the chance of such a result is small, 10%, i.e. given that you test a human in 10 out of 100 cases it will return positive result.
+- The test has some flaws, because it can also return positive result when given to a human. Luckilly, the chance of such a result is small, 10%, i.e. given that you test a human in 10 out of 100 cases it will return positive result.
 - We also know that vampires are quire rare, there is only 1 in 100 individuals.
-- What is the chance that someone you tested and who obtained positive test result is a vampire.
+- What is the chance that someone you tested and who obtained positive test result is a vampire?
 
 ## Bayes theorem
 
