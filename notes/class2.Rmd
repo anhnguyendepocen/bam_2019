@@ -72,6 +72,14 @@ $Pr(vampire | positive) = .0833$
 
 $$Posterior = \frac{Likelihood \times Prior}{Average Likelihood}$$
 
+## Bayes theorem
+
+$$Pr(parameters | data) = \frac{Pr(data | parameters) \times Pr(parameters)}{Pr(data)}$$
+
+## Bayes theorem
+
+$$Pr(\theta| \mathcal{D}) = \frac{Pr(\mathcal{D} | \theta) \times Pr(\theta)}{\int Pr(\mathcal{D} | \theta) \times Pr(\theta) \mathrm{d}\theta}$$
+
 ## Bayesian updating
 
 - Suppose you have build a perfect detector of vampires.
