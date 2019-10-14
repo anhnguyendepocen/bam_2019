@@ -1,10 +1,12 @@
 ---
 title: "Class 2: Bayes theorem and Bayesian updating"
-output: beamer_presentation
+output: 
+  beamer_presentation:
+    fig_crop: no
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = F, message = F, fig.width = 6, fig.height = 4)
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F, fig.height = 4, fig.width = 5)
 ```
 
 ## Bayes theorem
@@ -62,7 +64,9 @@ $Pr(vampire | positive) = .0833$
 
 ## Your turn
 
+## Verify your computation
 
+[When does a significant p-value indicate a true effect?](http://shinyapps.org/apps/PPV/)
 
 ## Bayes theorem
 
