@@ -1,0 +1,315 @@
+---
+title: "Class 3 - working with R"
+output: html_notebook
+---
+
+# 1. Getting help
+
+Many people say that `R has a steep learning curve`. This likely because they do not know how to use help tools. 
+
+Suppose you encountered a strange function `lm`, and you do not know what this function is for. Type `?` and function name to find help page.
+
+```{r}
+?lm
+```
+
+What if you want to conduct some analysis and you do not know what is the function for it. Type `??` and then type what you want to do.
+
+```{r}
+??correlation
+```
+
+If you the name you want to look for has spaces inside, then enclose it in double `.
+
+```{r}
+??`analysis of variance`
+```
+
+You can also use RStudio search capabilities, or just browse packages' help pages. In case of a more complex issues, you can find answer to almost any question by googling it.
+
+## Your turn:
+- Find what is `rnorm` function and how to use it.
+```{r}
+
+```
+
+- Find which function to use to conduct t-test of differences between independent groups.
+```{r}
+
+```
+
+
+# 2. Base R and its extension.
+
+When you install R, it offers some basic functionalities (like correlation analysis, regression analysis, analysis of variance). In fact you can work only with base R and you will still be able to do most of the things you would think of.
+
+However, R offers a lot more, when you install packages written by it's users (the list of R users include many famous statisticians).
+
+To install a new package type `install.packages()` and include the package name in the parenthesis.
+
+Note: To run the code below delete `#` before the function call. `#` is an R comment sign: Place it before any function call and R will ignore the call. I have included the comment here to avoid re-installing the package I already have.
+
+```{r}
+#install.packages('BayesFactor')
+```
+
+You do not have to install the same package twice. Once you download and install it, it is placed somewhere on your hard drive (depending on the OS). However, most package maintainers offer frequent updates (which remove bugs and offer new capabilities). It is thus worth reinstalling your packages from time to time. 
+Go into `Packages` card of the bottom roght panel of RStudio, and click `Update` button to check for packages updates.
+
+Once you have a new package installed call `library()` which the package name inside to start using it.
+
+```{r}
+library(BayesFactor)
+```
+
+Why you have to load the package, it it is already installed? One simple reason is that you want your code to be predictable.  Various packages may offer functions under the same name (e.g. function `alpha` in `scale` package and in `psych` package), but with completely different functions. By loading the package you are declaring that you want to use functions from a specific package.
+
+## Your turn:
+
+- Load the package called `tidyverse` (Install it if you it is not installed yet). See the startup message. What this package does? Look for the `Conflicts` section. What does it tell you?
+```{r}
+
+```
+
+
+# 3. Working with datasets
+
+## Loading datasets 
+
+Loading your data into R is simple, if you use RStudio. Go into File > Import Dataset > From SPSS... (or choose other format), and follow further instructions.
+
+The loaded dataset is stored in an object called `data.frame`.
+
+## First look a the dataset
+
+You can take a quick look at the `data.frame` with a function `glimpse` (make sure you have loaded the package `tidyverse`).
+
+```{r}
+class3_data %>% 
+  glimpse()
+```
+
+*Note*: In this and other examples I will use the pipeline operator `%>%`. Alternatively you can call the same function with `glimpse(data)`. However, the pipeline operator is more elegant and easier to read in case of complex operations.
+How to understand the pipeline operator? Imagine a production line where you have some raw material, and then put it into machine 1:
+
+`raw material` %>% `machine 1` -> `final outcome`
+
+You can also imagine more complex production line: 
+
+`raw material` %>% `machine 1` %>% `machine 2` -> `final outcome`
+
+Note that in this case, the oucome of `machine 1` is inserted into `machine 2` which produces the final outcome.
+
+
+If you want to look at a specific variable you can do it with the `$` operator.
+
+```{r}
+class3_data$Film
+```
+
+## Frequency tables
+
+If you want to see the frequency of observations within different Film conditions, you can check it with `count()` function.
+
+```{r}
+class3_data %>% 
+  count(Film)
+```
+
+## Filtering datasets
+
+If you want to select only a subset of cases, you can use the `filter()` function. In this case only observations with a value of Film equal to "Frontline" are selected.
+
+```{r}
+class3_data %>% 
+  filter(Film == "Frontline")
+```
+
+*Note*: When using `filter()` function you will use logical operators such as:
+
+- == (double equal sign) - equal to
+- != (exclamation mark and equal signal) - not equal to
+- > - greater than
+- < - less than
+- >= (greater than and equal sign) - greater than or equal
+- <= (less than and equal sign) - less than or equal
+- & - logical product (AND), e.g. Film == "Frontline" & Film == "Halloween" returns observations where variable Film is equal to 1 and 2 (empty set, because the variable Film has only 1 value per observation)
+- | - logical sum (OR), e.g. Film == "Frontline" | Film == "Halloween" gives returns observations where variable Film is equal to 1 or 2 (non-empty set)
+
+## Selecting variables
+
+If you are interested only in a subset of variables you can use function `select()`.
+
+```{r}
+class3_data %>% 
+  select(Film, EA2)
+```
+
+Notice how straightforward is to merge selecting and filtering with the pipeline operator. With the standard call you would have to type: `select(filter(data, Film == 1), Film, EA2)`.
+
+```{r}
+class3_data %>% 
+  filter(Film == "Frontline") %>% 
+  select(Film, EA2)
+```
+
+## Summarising variables
+
+To summarise continuous variables (i.e. compute mean or standard deviation) you can use `summarise()` function.
+
+```{r}
+class3_data %>% 
+  summarize(mean(EA2), sd(EA2), mean(TA2), sd(TA2))
+```
+
+You can also preced the `summarise()` function with a function `group_by()` to first group the dataset according to some (categorical) variable, and to summarise variables within each group.
+
+```{r}
+class3_data %>% 
+  group_by(Film) %>% 
+  summarise(mean(EA2), sd(EA2), mean(TA2), sd(TA2))
+```
+
+# Computing new variables
+
+To compute new variables, e.g. a sum of existing variables you can use the `mutate()` function.
+
+```{r}
+class3_data %>% 
+  mutate(sumEATA = EA2 + TA2)
+```
+
+Note that this operation will not save the new variable into your dataset. To make such a change you have to make it explicit with an assignment operator.
+
+```{r}
+new_data <- class3_data %>% 
+  mutate(sumEATA = EA2 + TA2)
+new_data
+```
+
+
+## You turn
+- Compute a difference score between PA2 and NA2.
+```{r}
+
+```
+
+- Check the means of PA2, NA2, and the difference score across movie conditions. 
+```{r}
+
+```
+
+- Present the output with rows correponding only to movie 1 and 2.
+```{r}
+
+```
+
+
+
+# 4. Plotting your data
+
+## Basic plots with `ggplot2`
+
+Plotting with R is not hard. In this class we will `ggplot2` (because it is compatible with other packages we will use).
+
+With `ggplot2` you first define your dataset, with the variables of interest and then you map the variable values into some geometrical shapes (e.g. columns, points, lines, etc.).
+
+Lets start with a frequency table from one of previous examples.
+
+```{r}
+class3_data %>% 
+  count(Film)
+```
+
+Below you will find a empty call to `ggplot2`. There is nothin on the plot yet, you have to provide information how your data should be mapped into geometrical shapes.
+
+
+```{r}
+class3_data %>% 
+  count(Film) %>% 
+  ggplot()
+```
+
+Below you find an example of such mapping with `geom_col()` (i.e. columns). 
+
+First, note that different elements of `ggplot2` plots are connected with `+`. 
+
+Second, note the `aes()` (aesthetics) function inside `geom_col()`. This function explains how your data should be mapped into graphical properties. In this case the film number is mapped into a column horizontal position (`x`), and the count (`n`) is mapped into column height (`y`).
+
+```{r}
+class3_data %>% 
+  count(Film) %>% 
+  ggplot() + 
+  geom_col(aes(x = Film, y = n))
+```
+
+## Histograms
+
+With continuous variables you will likely want to use a histogram. A histogram is an operation where you cut a continuous variables into equally spaced bins, and then you count frequency of observations within each bin. Below you will find a histogram (`geom_histogram()`) of a variable `EA2` mapped into `x` position of different bins.
+
+Note that by default `ggplot2` uses 30 bins, but you can adjust it with an additional arguemnt (e.g. bins = 15, see additional example below).
+
+```{r}
+class3_data %>% 
+  ggplot()+
+  geom_histogram(aes(x=EA2))
+```
+
+```{r}
+# Trick: adding normal curve
+class3_data %>% 
+  ggplot()+
+  geom_histogram(aes(x=EA2, y=..density..), bins = 15, fill="white", colour="black")+
+  stat_function(fun = dnorm, args = list(mean = mean(class3_data$EA2), 
+                                         sd = sd(class3_data$EA2)),
+                colour = "blue2")
+```
+
+## Scatter plots
+
+Another common geometrical shape is a scatter plot (`geom_point()`). Here value of `EA2` is mapped into point's `x` position, and value of `TA2` is mapped into points's `y` position.
+
+```{r}
+class3_data %>% 
+  ggplot()+
+  geom_point(aes(x = EA2, y = TA2))
+```
+
+```{r}
+# Trick: adding fitted lines
+class3_data %>% 
+  ggplot(aes(x=EA2, y=TA2))+
+  geom_point()+
+  geom_smooth(colour = "blue", method = "lm")
+```
+
+## Boxplots
+
+If you want to explore difference between movie conditions with regard to some continuous variable, then you can use boxplots. 
+```{r}
+class3_data %>% 
+  ggplot()+
+  geom_boxplot(aes(x=Film, y=TA2))
+```
+
+```{r}
+# Trick: column plot with means and standard errors
+class3_data %>% 
+  group_by(Film) %>% 
+  summarise(mTA2 = mean(TA2), se = sd(TA2)/sqrt(n())) %>% 
+  ggplot(aes(x= Film, y=mTA2))+
+  geom_col(aes(fill=Film))+
+  geom_errorbar(aes(ymin = mTA2 - se, ymax = mTA2 + se), width = 0.2)+
+  guides(fill=FALSE)
+```
+
+## Your turn
+- Draw a histogram of PA2.
+```{r}
+
+```
+- Compare the values of PA2 across Film conditions with a boxplot.
+```{r}
+
+```
+
