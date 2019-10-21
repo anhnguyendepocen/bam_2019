@@ -199,7 +199,7 @@ new_data
 
 ```
 
-- Present the output with rows correponding only to movie 1 and 2.
+- Present the output with rows correponding only to movies "Frontline" or "Halloween".
 ```{r}
 
 ```
