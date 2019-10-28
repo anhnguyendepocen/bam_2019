@@ -30,12 +30,12 @@ You can also use RStudio search capabilities, or just browse packages' help page
 ## Your turn:
 - Find what is `rnorm` function and how to use it.
 ```{r}
-
+?rnorm
 ```
 
 - Find which function to use to conduct t-test of differences between independent groups.
 ```{r}
-
+??t.test
 ```
 
 
@@ -50,7 +50,7 @@ To install a new package type `install.packages()` and include the package name 
 Note: To run the code below delete `#` before the function call. `#` is an R comment sign: Place it before any function call and R will ignore the call. I have included the comment here to avoid re-installing the package I already have.
 
 ```{r}
-#install.packages('BayesFactor')
+install.packages('BayesFactor')
 ```
 
 You do not have to install the same package twice. Once you download and install it, it is placed somewhere on your hard drive (depending on the OS). However, most package maintainers offer frequent updates (which remove bugs and offer new capabilities). It is thus worth reinstalling your packages from time to time. 
@@ -68,7 +68,7 @@ Why you have to load the package, it it is already installed? One simple reason 
 
 - Load the package called `tidyverse` (Install it if you it is not installed yet). See the startup message. What this package does? Look for the `Conflicts` section. What does it tell you?
 ```{r}
-
+library(tidyverse)
 ```
 
 
@@ -84,7 +84,7 @@ The loaded dataset is stored in an object called `data.frame`.
 
 You can take a quick look at the `data.frame` with a function `glimpse` (make sure you have loaded the package `tidyverse`).
 
-```{r}
+```{r} 
 class3_data %>% 
   glimpse()
 ```
@@ -182,7 +182,7 @@ class3_data %>%
 Note that this operation will not save the new variable into your dataset. To make such a change you have to make it explicit with an assignment operator.
 
 ```{r}
-new_data <- class3_data %>% 
+new_data = class3_data %>% 
   mutate(sumEATA = EA2 + TA2)
 new_data
 ```
@@ -191,17 +191,24 @@ new_data
 ## You turn
 - Compute a difference score between PA2 and NA2.
 ```{r}
-
+newdata = class3_data %>% 
+  mutate(diffr = PA2 - NA2)
+newdata
 ```
 
 - Check the means of PA2, NA2, and the difference score across movie conditions. 
 ```{r}
-
+newdata %>% 
+  group_by(Film) %>% 
+  summarise(mean(PA2), mean(NA2), mean(diffr))
 ```
 
 - Present the output with rows correponding only to movies "Frontline" or "Halloween".
 ```{r}
-
+newdata %>% 
+  group_by(Film) %>% 
+  summarise(mean(PA2), mean(NA2), mean(diffr)) %>% 
+  filter(Film == "Frontline" | Film == "Halloween")
 ```
 
 
@@ -268,7 +275,7 @@ class3_data %>%
 ## Scatter plots
 
 Another common geometrical shape is a scatter plot (`geom_point()`). Here value of `EA2` is mapped into point's `x` position, and value of `TA2` is mapped into points's `y` position.
-
+-----
 ```{r}
 class3_data %>% 
   ggplot()+
