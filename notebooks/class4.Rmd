@@ -13,7 +13,7 @@ In those plots I have used the Beta distribution to quantify plausibility of var
 
 IMPORTANT: Distributions are controlled by parameters, e.g. the Normal distribution is controlled by mean and variance (or standard deviation). Beta distribution is controlled by two shape parameters.
 
-For example, setting both parameters to 1 will result in a uniform distribution over [0,1] range.
+For example, setting both parameters of Beta distribution to 1 will result in a uniform distribution over [0,1] range.
 
 ```{r}
 data <- data.frame(x = seq(0, 1, length.out = 100))
@@ -26,7 +26,7 @@ data %>%
                 fill = "blue", alpha=0.3)
 ```
 
-Try setting different parameters values, and see what results you will obtain. Try values in a range (0,1].
+Try setting different parameters values, and see what results you will obtain. Try values in a range (0,5].
 
 ```{r}
 data %>% 
@@ -39,7 +39,7 @@ data %>%
 ```
 
 
-Given that you have your chosen prior values, and some data computing posterior is easy. Posterior is also a beta distribution with two parameters.
+Given that you have your chosen prior values and collected some data, computing posterior is easy. Posterior is also a beta distribution with two parameters.
 Posterior shape1 is a prior shape1 + a number of successes (here successful detections of vampires).
 Posterior shape2 is a prior shape2 + a number of failures (here failed detections of vampires).
 
@@ -61,11 +61,11 @@ data %>%
   scale_fill_manual(values=c("red","blue"))
 ```
 
-Try setting your own data and see how they update prior beliefs. Specifically try increasing the total number of trials significantly, and see how it changes your posterior distribution.
+Try setting your own imaginary data and see how they update prior beliefs. Specifically try increasing the total number of trials significantly, and see how it changes your posterior distribution.
 
 ```{r}
-vampires = 
-humans = 
+vampires = 23
+humans = 25
 data %>% 
   ggplot(aes(x))+
   stat_function(aes(fill = "Prior"),
@@ -85,7 +85,7 @@ data %>%
 
 The above example works only in a limited number of models. It also required a good knowledge of math and calculus. How can we obtain the same result without calculus and without the use of Beta distribution?
 
-Below we initialize a vector of 100 paramaeter values. We know that proportions can potentially take an infinite number of values between 0 and 1. Yet, we can approximate the result with just 100 values.
+Below we initialize a vector of 100 parameter values. We know that proportions can potentially take an infinite number of values between 0 and 1. Yet, we can approximate the result with just 100 values.
 Furthermore, we initialize 100 prior probabality values.
 
 ```{r}
@@ -100,7 +100,7 @@ data_grid
 ```
 
 
-We can plot this is grid as an approximation of our prior distribution. Notice that the resolution is worse that in the analytical case. But it should be fine for most of our practical cases.
+We can plot this grid as an approximation of our prior distribution. Notice that the resolution is worse that in the analytical case. But it should be fine for most of our practical cases.
 
 ```{r}
 data_grid %>% 
@@ -111,14 +111,14 @@ data_grid %>%
            fill = "lightblue")
 ```
 
-For each of the parameter values, we are comuting its likelihood. 
+For each of the parameter values, we are computing its likelihood. 
 Recall that in 10 trials we observed 3 vampires. Likelihood tells us how likely is such a result given each value of the parameter. We are using binomial likelihood and a function called `dbinom()`. 
 
 More importantly we are computing the posterior distribution, which is prior times likelihood. 
 
 ```{r}
 data_grid = data_grid %>% 
-  mutate(likelihood = dbinom(3, 10, prob = p_grid)) %>% 
+  mutate(likelihood = dbinom(x = 3, size = 10, prob = p_grid)) %>% 
   mutate(unstd.posterior = prior * likelihood)
 data_grid
 ```
@@ -134,7 +134,7 @@ data_grid %>%
            fill = "red")
 ```
 
-Notice that posterior is a probability distribution so it has to sum up to 1. However, in this case it does not. That is why we have called it `unstd.posterior` = unstandardized posterior.
+Notice that posterior is a probability distribution, so it has to sum up to 1. However, in this case it does not. That is why we have called it `unstd.posterior` = unstandardized posterior.
 
 ```{r}
 sum(data_grid$unstd.posterior)
@@ -168,7 +168,7 @@ data_grid %>%
 
 # 3. Sampling from the posterior distribution
 
-In the above example we saw how the model finds the proper posterior distribution. However, working with such a distributions and summarizing it is usually a very hard task. Also, the grid-approximation works only in case of very simple models with 1 or parameters. We will use models that can have 100 or 1000 of parameters - there grid-approximation will fail.
+In the above example, we saw how the model finds the proper posterior distribution. However, working with such a distributions and summarizing it is usually a very hard task. Also, the grid-approximation works only in case of very simple models with 1 or parameters. We will use models that can have 100 or 1000 of parameters - there grid-approximation will fail.
 
 ```{r}
 cat("With 1 parameter and 100 grids, grid-approximation requires", 100^1, "calculations.\n")
@@ -181,7 +181,7 @@ cat("With 5 parameters and 100 grids, grid-approximation requires", 100^5, "calc
 This is why we will use simulation-based approximations, like MCMC. More on that during the next class.
 
 
-To sample from the posterior distribution that we obtained, we will use a function called `sample()`.
+To sample from the posterior distribution, we will use a function called `sample()`.
 x - values to sample from (here possible values of proportion of vampires)
 prob - posterior probability associated with each value of proportion of vampires
 size - a total nubmer of samples
@@ -216,7 +216,7 @@ data_samples %>%
              colour = 'red')
 ```
 
-And plot a histogram or density plot (both will do a fine job here). Notice how close it is to the analytical posterior.
+And we can plot a histogram or density plot (both will do a fine job here). Notice how close it is to the analytical posterior.
 
 ```{r}
 data_samples %>% 
@@ -230,7 +230,7 @@ data_samples %>%
 
 # 4. Working with posterior samples
 
-Once we have posterior samples we can draw a number of information about it.
+Once we have posterior samples, we can draw a number of information about it.
 
 We will use a package called `bayestestR` to aid us in drawing some of the information.
 
@@ -264,7 +264,7 @@ Comparison of this values is beyond the scope of this course. In most of the cas
 
 ## Probabilities associated with intervals
 
-With posterior samples we can calculate probabilities associated with some parameter values.
+With posterior samples, we can calculate probabilities associated with some parameter values.
 
 For example, we can calculate probability that the proportion of vampires is less than 0.5. Note that with samples this very similar to summarizing data from participants (i.e. the same script would work if we would have a 10000 samples of individuals with some recorded quantities, and we would like to see how many of them have value of the quantity less than 0.5).
 
@@ -276,7 +276,7 @@ data_samples %>%
   summarise(prop_vampires_less_than_50per = n() / 10000)
 ```
 
-In the example, below we are calculating probability associated with the proportion of vampires in an interval from 0.10 to 0.20.
+In the example below, we are calculating probability associated with the proportion of vampires in an interval from 0.10 to 0.20.
 
 ```{r}
 data_samples %>% 
@@ -287,13 +287,23 @@ data_samples %>%
 ## Your turn
 
 - Calculate what is the probability of proportion of vampires higher than 0.30.
+
+```{r}
+
+```
+
 - Calculate what is the probability of proportion of vampires being higher than 0.25 and lower than 0.35.
+
+```{r}
+
+```
+
 
 ## Credible intervals and highest posterior densitiy intervals
 
 With the package `bayestestR` we can compute the Bayesian version of confidence intervals. However, in Bayesian approach we call them credible intervals.
 
-Assuming the model, they inform us that with some fixed probability, proportion of vampires is in an interval.
+Assuming the model, they inform us that, with some fixed probability, proportion of vampires is in an interval.
 
 ```{r}
 ci(data_samples$prop_vampires)
@@ -314,15 +324,15 @@ hdi(data_samples$prop_vampires)
 
 ## Testing hypotheses with posterior samples
 
-Sometimes you will want to test whether posterior distribution supports your hypothesis (or whether it allows rejection of some null hypothesis). This is not strictly Bayesian, and it is only for people who cannot live without p-values. 
+Sometimes you will want to test whether posterior distribution supports your hypothesis (or whether it allows rejection of null hypothesis). This is not strictly Bayesian, and it is only for people who cannot live without p-values. 
 
 In Bayesian approach the closest to p-value is equivalence testing. Here is how to do it:
 - define some range of parameters that supports H0 - we will call it ROPE (region of practical equivalence)
-- with samples from your posterior distribution find the 89% HPDI
+- with samples from posterior distribution find the 89% HPDI
 - check whether ROPE and 89% HPDI overlap:
-  - if no reject H0
-  - if ROPE completely covers 89% HPDI accept H0
-  - otherwise we cannot decide
+  - if no, reject H0
+  - if ROPE completely covers 89% HPDI, accept H0
+  - otherwise, we cannot decide
   
 In the example below, we are testing the null hypothesis that the proportion of vampires is in an interval (ROPE) from 0 to 0.05.
 
@@ -331,9 +341,18 @@ equivalence_test(data_samples$prop_vampires,
                  range = c(0,0.05))
 ```
 
+## Your turn:
+- Define your own ROPE, that is a range of value that supports your null hypothesis, and test it with equivalence test.
+
+```{r}
+
+```
+
+
+
 # 5. Posterior predictive distribution
 
-With posterior samples we can also calculate plausible outcomes of future studies. This is called posterior predictive distribution. We can use it to verify to what extent our model is adequate with respect to our data. Or to make predictions about the future. 
+With posterior samples, we can also calculate plausible outcomes of future studies. This is called `posterior predictive distribution`. We can use it to verify to what extent our model is adequate with respect to our data. Or to make predictions about the future. 
 
 In the example below, for each posterior draw, we are sampling the plausible outcome of the future experiment. Do not worry about the technical aspects. In our examples it will be a lot easier.
 
@@ -343,10 +362,9 @@ data_samples = data_samples %>%
 data_samples
 ```
 
-And now we are plotting frequencies of each of future potential outcomes. 
-
+And now, we can plot frequencies of each of the future potential outcomes. 
 In our study in 10 trials, we observed 3 vampires. Notice that the plot below suggest that the most likely value of some future study is also 3. 
-But other values in total have higher plausibility. 
+But other values in sum have higher plausibility (i.e. probability of obtaining 3 vampires out of 10 in some future study is around 0.20, but probability of obtaining some different number of vampires is almost 0.80). 
 
 ```{r}
 data_samples %>% 
