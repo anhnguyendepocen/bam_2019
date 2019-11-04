@@ -1,4 +1,4 @@
-# Home assignment 1
+# Home assignment 3
 
 To understand the idea of Markov chain Monte Carlo better read chapter 8 from 'Statistical Rethinking'.
 
