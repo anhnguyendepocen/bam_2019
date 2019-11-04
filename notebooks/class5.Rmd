@@ -1,0 +1,349 @@
+---
+title: "Class 5"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+# 1. Sampling to summarize posterior.
+
+During our classes, we will use simulations to approximate the expectations over the posterior distributions (i.e. to compute the mean, sd, CIs, or other estimates associated with posterior distribution). These simulations will be based on samples drawn from posterior distribution.
+
+In R, you can easily draw independent samples from several common distributions (e.g. Normal, Binomial, Beta, Multivariate Normal, etc.).
+
+In the example below, we are drawing 100 sample from Normal distribution with mean=5 and standard deviation=2. And plot the sample as a traceplot (each subsequent sample is drawn on the x-axis, with its value on the y-axis).
+
+```{r}
+normal_sample <- rnorm(n = 100, mean = 5, sd = 2)
+df <- normal_sample %>% 
+  enframe()
+
+df %>%
+  ggplot()+
+  geom_point(aes(name, value),
+            colour = "purple",
+            alpha = 1/2)+
+  labs(x="Sample ID", y="Value")+
+  theme_bw()
+```
+
+The problem arises, when posterior distribution is not similar to any common distribution. This is especially problematic, when we have posterior with multiple parameters, often correlated with each other. Often we cannot assume that they are distributed according to Multivariate Normal Distribution.
+
+In the example below, we are using Multivariate Normal distribution to sample posterior values describing how mean and standard deviation of IQ are distributed.
+
+There is one obvious problem with these samples. Can you notice it?
+
+```{r}
+set.seed(1234)
+MASS::mvrnorm(n = 100, 
+              mu = c(100, 15), 
+              Sigma = matrix(c(50, 20, 20, 50), ncol=2)) %>% 
+  as_tibble() %>% 
+  rename(IQ_mean = V1, IQ_sd = V2) %>% 
+  ggplot() +
+  geom_point(aes(IQ_mean, IQ_sd), alpha = 1/2, colour = "purple") +
+  labs(x="Mean of IQ", y="Standard deviation of IQ")+
+  theme_bw()
+```
+
+
+# 2. How to sample from almost any posterior distribution?
+
+The solution is to use some clever algorithm that would allow sampling from any posterior distribution. 
+One such algorithm is called the Metropolis algorithm.
+Instead of drawing a number of independent samples at one time, the idea is to draw subsequent values from the posterior distribution, one value at time. Each new value depends slightly on the previous values in the chain. So the samples are NOT INDEPENDENT, but - it occurs - that this is not a huge problem.
+
+```{r}
+# start with an empty chain (container) for parameter values
+mcmc_chain <- vector(mode="numeric", length = 100)
+
+# choose some possible parameter value 
+start_val = 0
+
+# set the chosen number as initial (starting) value in the chain 
+mcmc_chain[1] <- start_val
+
+# start a loop over remaining values of the chain (indexes from 2 to 100)
+for(i in 2:100) {
+  # find the current value of the parameter
+  current_value <- mcmc_chain[i - 1]
+  
+  # find a new potential value that slightly deviates from the current value
+  proposal_value <- current_value + rnorm(1, 0, 2)
+  
+  # check which value (current vs. proposal) is more plausible given some constraint (e.g. given the data) and calculate the ratio of probabilities
+  # ratio larger than 1 indictes that the proposal is more plausible
+  # ratio smaller than 1 indicates the the current value more plausible
+  ratio_of_dens <- dnorm(proposal_value, 5, 2) / dnorm(current_value, 5, 2)
+  
+  # draw a uniform number from 0 to 1
+  uniform_number <- runif(1, min = 0, max = 1)
+  
+  # check whether the uniform number is smaller than the minimum of two values: the ratio and 1
+  if(uniform_number < min(ratio_of_dens, 1)) {
+    # if yes: set the next value in the chain to be the proposal
+    mcmc_chain[i] <- proposal_value
+  } else {
+    # if no: set the next value in the chain to be the current value
+    mcmc_chain[i] <- current_value
+  }
+  # in other words: if the ratio is higher than 1 (the proposal is more probable than the current value), we are accepting the proposal as the new value
+  # otherwise (if the ratio is lower than 1), we are accepting the proposal with P(ratio), e.g. if ratio = 0.5, we are accepting the proposal in half of the cases
+  # accordingly, we are staying with the current value with P(1 - ratio)
+}
+  
+
+df <- enframe(mcmc_chain)
+
+df %>% 
+  ggplot()+
+  geom_line(aes(name, value),
+            colour = "purple")+
+  labs(x="Iteration", y="Parameter values")+
+  theme_bw()
+```
+
+You can see how the new values appear with this animation. You should install package called `gganimate` before running this code.
+
+```{r}
+library(gganimate)
+p <- df %>% 
+  ggplot()+
+  geom_line(aes(name, value),
+            colour = "purple")+
+  labs(x="Iteration",y="Parameter value")+
+  theme_bw()
+
+p +
+  transition_reveal(name)
+```
+
+Usually, the chain needs to pass some number of iteration to converge (i.e. to approach) to the desired distribution. We do not know, when it happens, but in most cases we know that ultimately it will happen.
+To solve this problem:
+- In practical applications, we will need more than 100 samples (usually several thousands). 
+- Furthermore, we will disregard initial values of the chain. These values are most likely not from the posterior distribution. 
+
+In the example below we are drawing 10000 samples, and disregard initial 5000.
+Before running this code set your own starting value (not too far from the value of 5). If the algorithm works, it should give similar answer irrespective of which value you choose.
+
+```{r}
+mcmc_chain <- vector(mode="numeric", length = 10000)
+# set your own starting value
+start_val = 
+mcmc_chain[1] <- start_val
+
+for(i in 2:10000) {
+  current_value <- mcmc_chain[i - 1]
+  proposal_value <- current_value + rnorm(1, 0, 0.5)
+  
+  ratio_of_dens <- dnorm(proposal_value, 5, 2) / dnorm(current_value, 5, 2)
+  
+  uniform_number <- runif(1, min = 0, max = 1)
+  
+  if(uniform_number < min(ratio_of_dens, 1)) {
+    mcmc_chain[i] <- proposal_value
+  } else {
+    mcmc_chain[i] <- current_value
+  }
+}
+
+df <- enframe(mcmc_chain) %>% 
+  slice(5000:n())
+
+df %>% 
+  ggplot()+
+  geom_line(aes(name, value),
+            colour = "purple")+
+  labs(x="Iteration", y="Parameter values")+
+  theme_bw()
+```
+
+## Your turn
+
+In the table below, in the column called `value` you can find values sampled with Metropolis algorithm. They should approximate the Normal distribution with mean 5 and sd 2. Check whether this is the case, i.e. to what extent the mean and sd of samples deviate from the true values. 
+
+```{r}
+df
+```
+
+
+```{r}
+
+```
+
+## What MCMC means?
+
+Metropolis algorithm is an example of a general class of methods known as MCMC = Markov chain Monte Carlo.
+- Monte Carlo is an area of Monaco known for casinos - places known for randomness, chance, and probability. In mathematics, it refers to methods that use drawing random samples to approximate some values (e.g. integrals).
+- Markov chain - refers to Markovian process, i.e. the description of how some values may change. It's use is out of the scope of this course, and is not necessary to understand MCMC. What you need to know is that during the iterations the way how parameter values change resembles Markovian process.
+
+## Several other MCMC algorithms
+
+- Metropolis-Hastings algorithms
+- Gibbs algorithm
+- **Hamiltonian (or Hybrid) Monte Carlo** - we will use this because of its high efficiency
+
+# 3. Introduction to Stan
+
+[Stan](mc-stan.org) is a statistical programming language that allows full Bayesian statistical inference with MCMC sampling (Hamiltonian Monte Carlo and more specifically NUTS = No-U-Turn Sampler). 
+
+Stan models can be run through other softwares such as Stata, Matlab, Python, and R. To run Stan through R, we will use the package called `rstan`.
+
+```{r}
+library(rstan)
+#if you have a laptop with mutlicore CPU and large amount of RAM (at least 8 GB), uncomment the line below
+#options(mc.cores = parallel::detectCores())
+```
+
+To run a Bayesian model in Stan you have to define it through a syntax that resembles C++.
+In the code below note 3 basic blocks (`data`, `parameters`, and `model`):
+- in the `data` block, we are defining known values that will be used in a model (here: number of trials in total and a number of observed vampires)
+- in the `parameters` block, we are defining unknown values that we wish to infer
+- in the `model` block, we are defining how parameters generate data and also the prior distribution of parameters
+
+```{r}
+model_code <- "
+data {
+  int<lower=0> total;
+  int<lower=0> vampires;
+}
+parameters {
+  real<lower=0, upper=1> p_vamp;
+}
+model {
+  p_vamp ~ beta(1, 1);
+  
+  vampires ~ binomial(total, p_vamp);
+}
+"
+```
+
+Before sampling we need to prepare a named `list` with all data that we want to use in our model.
+```{r}
+model_data <- list(total = 10, vampires = 3)
+```
+
+To run the model, we are using a function called `stan`.
+We have to supply the model code and model data. Furthermore, we can set the number of samples (`iter`), how many initial samples to disregard (`warmup`), and how many parallel simulated draws to run (`chains`, you should run at least 2).
+The additional argument `seed` is used to set (pseudo-)random numbers generator to some fixed value. This can be used if you would like to obtain exactly the same result each time you run your model.
+
+The function below will generate 4 x 2000 samples, but it will treat initial 1000 samples in each chain as a warmup. Therefore, the output will have 4000 samples in total. 
+
+```{r}
+model_fit <- stan(
+  model_code = model_code,
+  data = model_data,
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  seed = 1234
+)
+```
+
+Lets see how the first chain traverses through the parameter values. Run the code below only if you have `gganimate` installed. 
+
+```{r}
+posterior <- rstan::extract(model_fit, pars = "p_vamp",
+                     permuted = F, inc_warmup = T)[,1,1]
+p <- posterior %>% 
+  enframe() %>% 
+  ggplot()+
+  geom_line(aes(name, value),
+            colour = "purple")+
+  theme_bw()
+
+p + 
+  transition_reveal(name)
+```
+
+To print basic summaries of the model, just print (with a function `print`) the fitted object. You can decide how precise the output should be (i.e. how many decimal places it should have) with `digits_summary` parameter.
+
+```{r}
+print(model_fit, digits_summary = 3)
+```
+
+Before you make any inference from the posterior, you have to make sure that the sampling procedure proceeded according to some rules.
+
+First, look at the traceplot and see whether all chains traverse around the same parameter range. If yes, the Rhat values (see the output above) should be close to 1 (preferably smaller than 1.01). Higher values indicate some problems with the model - possibly you should run your model with more iterations.
+
+```{r}
+plot(model_fit, plotfun = "trace")
+```
+
+Second, check the autocorrelation plot for each parameter, i.e. how adjacent values of parameters correlate with each other. Ideally, we would like to observe no correlation between adjacent iterations (i.e. we would like to have independent samples).
+High autocorrelation leads to decreased `Effective Sample Size` (see ess in the output above), i.e. small number of independent samples. The more independently sampled values we have, the more precise are our parameter estimates. 
+ESS should be at least 400 to precisely estimate the mean of posterior distribution, but it should be around 4000 to precisely estimate 95% CIs.
+
+```{r}
+plot(model_fit, plotfun = "ac", pars = "p_vamp")
+```
+
+Once we see that these two criteria (i.e. low Rhat and large ESS) are met, we can make inferences from the posterior distribution. In the plot below, we are summarizing the density of our posterior distribution.
+```{r}
+plot(model_fit, show_density = T,
+     ci_level = .95,
+     outer_level = 1)
+```
+
+
+## Your turn
+
+Follow the example below. Run each cell of the code below and check whether you can safely use the sample to draw inferences from this model. 
+
+First, run the code.
+
+```{r}
+model_code2 <- "
+data {
+  int<lower=0> total;
+  int<lower=0> vampires;
+}
+parameters {
+  real<lower=0, upper=1> p_vamp;
+  real<lower=0> a_beta;
+  real<lower=0> b_beta;
+}
+model {
+  p_vamp ~ beta(a_beta, b_beta);
+  
+  vampires ~ binomial(total, p_vamp);
+}
+"
+```
+
+Then, assign the data and run the model.
+
+```{r}
+model_data2 <- list(vampires = 3, total = 10)
+model_fit2 <- stan(
+  model_code = model_code2,
+  data = model_data2,
+  seed = 1234
+)
+```
+
+Check the validity of the sampled values.
+Write up everything that seems suspicious.
+```{r}
+model_fit2
+```
+
+```{r}
+plot(model_fit2, plotfun = "trace")
+```
+
+```{r}
+plot(model_fit2, plotfun = "ac", pars = "p_vamp")
+```
+
+```{r}
+plot(model_fit2, show_density=T,
+     pars = "p_vamp",
+     ci_level = .95,
+     outer_level = 1)
+```
+
+
+

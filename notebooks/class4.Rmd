@@ -32,8 +32,8 @@ Try setting different parameters values, and see what results you will obtain. T
 data %>% 
   ggplot(aes(x))+
   stat_function(fun = dbeta,
-                args = list(shape1 =  ,
-                            shape2 =  ),
+                args = list(shape1 =  1,
+                            shape2 =  1),
                 geom = "area",
                 fill = "blue", alpha=0.3)
 ```
@@ -64,8 +64,8 @@ data %>%
 Try setting your own imaginary data and see how they update prior beliefs. Specifically try increasing the total number of trials significantly, and see how it changes your posterior distribution.
 
 ```{r}
-vampires = 23
-humans = 25
+vampires = 50
+humans = 950
 data %>% 
   ggplot(aes(x))+
   stat_function(aes(fill = "Prior"),
@@ -149,7 +149,7 @@ data_grid = data_grid %>%
 data_grid
 ```
 
-Now we have posterior in standardized form.
+Now we have pos terior in standardized form.
 
 ```{r}
 sum(data_grid$posterior)
@@ -312,7 +312,7 @@ ci(data_samples$prop_vampires)
 To control the probability, you have to change `ci` parameter of this function. For example to obtain 95% CI, you have to set ci to 0.95.
 
 ```{r}
-ci(data_samples$prop_vampires, ci = .95)
+ci(data_samples$prop_vampires, ci = .89)
 ```
 
 As an alternative you can use HPDI (highest posterior density intervals). The exact difference between credible intervals and highest posterior density intervals is beyond the scope of this course. In most of our cases both will be very close to each other and you can use any of them.
@@ -338,7 +338,7 @@ In the example below, we are testing the null hypothesis that the proportion of 
 
 ```{r}
 equivalence_test(data_samples$prop_vampires,
-                 range = c(0,0.05))
+                 range = c(0,0.15 ))
 ```
 
 ## Your turn:
