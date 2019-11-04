@@ -1,0 +1,66 @@
+---
+title: "Home assignment 3"
+output: html_notebook
+---
+
+In this home assignment you will start working with MCMC samples.
+
+Make sure you loaded `rstan` and `bayestestR`.
+
+```{r}
+library(rstan)
+library(bayestestR)
+```
+
+
+Below you will find data from a study where IQ of 20 vampires was tested. 
+
+```{r}
+IQ_of_vampires <- list(iq=c(127, 94, 113, 103, 121, 99, 116, 132, 119, 87, 87, 117, 100, 114, 119, 151, 110, 101, 101, 117))
+```
+
+The Stan model below is used to obtain posterior of mean and standard deviation of vampires (i.e. what are our belief about intelligence of vampires after obtaining results of the study). Run the code below. 
+
+```{r}
+model_code <- "
+data {
+  vector[20] iq;
+}
+parameters {
+  real IQmean;
+  real<lower=0> IQsd;
+}
+model {
+  iq ~ normal(IQmean, IQsd);
+}
+"
+```
+
+## Task 1
+
+Run the Stan model with the `stan` function. Complete the gaps.
+
+```{r}
+model_fit <- stan(
+
+)
+```
+
+## Task 2
+
+Check whether the samples from the posterior distribution meet the basic criteria. Use both plots and values (Rhat, ESS) to assess the samples. Describe each and decide, whether you can use the samples to make inferences.
+
+## Task 3
+
+The code below is used to obtain samples related to beliefs about mean and standard deviation of IQ among vampires. Describe each parameter with both point estimates and intervals (CIs and HPDIs). Use functions from the package `bayestestR`.
+```{r}
+posterior_IQmean <- as.array(model_fit, pars = "IQmean")
+posterior_IQsd <- as.array(model_fit, pars = "IQsd")
+```
+
+## Task 4
+
+You know that IQ among human has a Normal distribution with mean 100 and standard deviation of 15. Check whether both mean and standard deviation of IQ among vampires are different. 
+Use equivalence tests. Your professor told you that the mean IQ within a range from 98 to 102, and standard deviation of IQ within a range from 14 to 16 are consistent with the null hypothesis that IQ of vampires is distributed similarly to IQ of humans.
+
+
