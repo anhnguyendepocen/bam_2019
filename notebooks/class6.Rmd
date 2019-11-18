@@ -1,0 +1,212 @@
+---
+title: "Class 6"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+```
+
+# 1. Using brms instead of writing code in Stan
+
+`Stan` lets you code almost every kind of model you can think of. However, this comes with a cost: you need to get familiar with a quite complex coding language. In case of less complex and more generic models, this may seem unnecessarily hard.
+
+Luckily, there is a solution: a package called `brms` which allows you to examine a range of models with a fairly simple syntax. If you are familiar with basic modeling syntax in `R`, learning how to use `brms` should be a no brainer. 
+
+What `brms` does is it translates simple `R` commands into `Stan` code, runs sampling procedure, and it returns a nicely packaged object, that can be plotted or summarized.
+
+# Vampires model revisited
+
+`brms` takes `data.frame` objects as an input. Once you load your SPSS or Excel spreadsheet into `R` it should be ready to use with `brms`. Our example with proportion of vampires consists of only 1 observation, hence the data.frame has only 1 row with a column denoting a number of tests, and a column denoting a number of observed vampires. 
+
+The additional colums `p` is used here as an auxiliary variable, and has no real meaning. I am using it to create the model as close as possible to the model from previous class. Your `data.frame` may have many more columns, that you will not use in your model. This is not an obstacle, you don't have to delete these columns before modeling.
+
+```{r}
+df1 <- data.frame(tests = 10, vampires = 3, p = 1)
+df1
+```
+
+Contrary to `Stan` code, `brms` code is significantly less wordy. Only 4 lines are required to fit the vampires model.
+
+```
+brm(formula = PREDICTED_VARIABLE ~ PREDICTORS,
+    data = NAME_OF_DATA_FRAME,
+    prior = PRIOR_DISTRIBUTION,
+    family = LIKELIHOOD_DISTRIBUTION)
+```
+
+`formula` - consists of two sides; the left-side, before `~`, indicates an outcome (predicted or dependent) variable; the right-side, after `~` indicates predictor(s) (independent variable)(s)).
+IMPORTANT: When you don't have any predictors, and you just want to examine a single (outcome) variable, you can write `outcome ~ 1` (read outcome regressed on the intercept).
+`data` - a reference to a `data.frame` object; column names has to be exactly the same as names of variables used in the formula.
+`prior` - definition of prior distribution; you can leave it blank in which case `brms` will use some default prior.
+IMPORTANT: Default priors are set by the creator of the `brms` package. This does not mean that you should accept them blindly. They may change with some future updates of the `brms`. Always think carefully how to set your priors.
+`family` - a likelihood distribution used with your model. In our vampires example, we will use a `binomial` distribution (which is justified given we are modeling proportions). The other common likelihood is `gaussian`, for Normal distributed outcome variables. `brms` offers a variety of likelihood choices.
+
+Recall the Stan model from the last class. Below you will find equivalent model written in `brms`. 
+There are 2 additional details:
+- `vampires | trials(tests)` - read as `n vampires across T tests`, this syntax is specific for binomial models, and will not be used with Normal models.
+- `~ p - 1` - `~ 1` would denote a model with only intercept. However, the default intercept used in `brms` does not allow setting the prior we would like to. Thus, I am removing the default intercept (`-1`), and I am adding my custom intercept (the `p` variable, which is just 1). 
+
+```{r}
+# loading brms and setting up plotting options
+library(brms)
+theme_set(theme_default())
+
+fit1 <- brm(vampires | trials(tests) ~ p - 1,
+           data = df1,
+           family = binomial(link = "identity"),
+           prior = prior(beta(1, 1), lb=0, ub=1))
+```
+
+Lets print the summary of our model.
+
+Check whether R-hat values and ESS are satisfactory.
+
+```{r}
+fit1
+```
+
+We can also plot basic information about the model.
+
+```{r}
+plot(fit)
+```
+
+Lets extend our model. Below you will find a data from several European cities where similar surveys were conducted, and various numbers of vampires were observed.
+
+```{r}
+df2 <- data.frame(tests = 10,
+                  vampires = c(3,2,0,1,3,4,5,4), 
+                  p = 1,
+                  city = c("Warsaw", "Prague", "Kiev", "Moscow",
+                           "Berlin", "Paris", "London", "Madrid"))
+df2
+```
+
+The model is exactly the same. We are only providing a new data.frame as input.
+
+```{r}
+fit2 <- brm(vampires | trials(tests) ~ p - 1,
+           data = df2,
+           family = binomial(link = "identity"),
+           prior = prior(beta(1, 1), lb=0, ub=1))
+```
+
+Lets print our updated model. Notice that intervals around the point estimate are thinner (as we have more data).
+
+```{r}
+fit2
+```
+
+You might notice that the number of vampires observed in Western European cities is slightly higher than in Eastern European cities. Lets add a variable that labels Western and Eastern European capital cities.
+
+```{r}
+df3 <- df2 %>% 
+  mutate(part = factor(rep(c("east","west"), each = 4), levels = c("west","east")))
+df3
+```
+
+Lets replace our intercept `p` with the new variable `part` denoting part of the Europe where the city is located.
+
+```{r}
+fit3 <- brm(vampires | trials(tests) ~ part - 1,
+           data = df3,
+           family = binomial(link = "identity"),
+           prior = prior(beta(1, 1), lb=0, ub=1))
+```
+
+In the output we have now two parameters for Eastern and Western parts of Europe.
+
+```{r}
+fit3
+```
+
+```{r}
+plot(fit3)
+```
+
+Usually, we would be interested whether proportions of vampires in Eastern and Western Europeans are credibly different. We could examine such a difference with `fit3`, but this has some limitations (e.g. we cannot set prior on the difference between the 2 proportions).
+
+To examine such a difference we need to make some adjustements to our code:
+- on the right-hand side of the formula we are including a variable `part` and removing the expression `-1`: This tells R to compare values associated with levels of the variable `part`.
+- we are changing link function in the definition of family to `logit`; this will transform probabilities to more convenient scale (this is similar to Fisher transformation; more on that during some of the next classes)
+- because the difference score is now on a different scale, we cannot use Beta prior. Instead, we are using scaled Student t distribution (with 1 degree of freedom, mean equal to 0, and scale equal to 2.5).
+
+```{r}
+fit4 <- brm(vampires | trials(tests) ~ part,
+           data = df3,
+           family = binomial(link = "logit"),
+           prior = prior(student_t(1, 0, 2.5)))
+```
+
+
+In the model summary, there is a row `parteast` which denotes a difference between Western and Eastern European cities. The coefficients are on the transformed scale, so it is difficult to intuitively analyze them.
+
+```{r}
+fit4
+```
+
+One way to obtain more intuitive description of the results is to use a package called `emmeans` (more on that later). 
+
+```{r}
+library(emmeans)
+predicted_props <- emmeans(fit4, pairwise ~ part)
+summary(predicted_props, type="response")
+```
+
+If you would like to obtain difference in the original scale (i.e. proportions), there is some fast and dirty way. Later during the course, we will cover more appealing ways of solving this issue.
+
+```{r}
+hypothesis(fit4, "inv_logit_scaled(Intercept) - inv_logit_scaled(Intercept+parteast) = 0")
+```
+
+We can plot conditional proportions with a function called `marginal_effects` (beware that in the future releases of `brms` this function will be renamed to `conditional_effects`).
+
+```{r}
+marginal_effects(fit4)
+```
+
+We can conduct equivalence tests with the package `bayestestR`.
+
+```{r}
+library(bayestestR)
+equivalence_test(fit4)
+```
+
+Another way of testing hypotheses is by using Bayes Factors.
+
+Bayes Factors informs how much plausibility of some hypothesis changed due to observing new data. In other words, how our prior belief about some hypothesis changed (into posterior belief after seeing the data). These values informs us that our study increased/decreased our confidence in some hypothesis (compared to our knowledge before conducting the study).
+
+```{r}
+bfDiff <- bayesfactor_parameters(fit4)
+bfDiff
+```
+
+Plotting BayesFactor object helps to understand the idea behind the Bayes Factors.
+A green plot denotes prior distribution, and a red plot denotes posterior distribution.
+Dashed vertical line denotes the null hypothesis (here a difference of 0). 
+Places where the dashed line crosses prior and posterior densities are denoted with green and red points, respectively.
+You can see that the green point is slightly higher than the red point. This means that before seeing the data, the null hypothesis was more plausible than it is after making the observations. In other words, plausibility of the null hypothesis decreased almost 4 (more specifically 3.63) times after seeing the data.
+
+```{r}
+plot(bfDiff)
+```
+
+
+# 2. How to prepare to the midterm.
+
+- make sure you understand how to use Bayes theorem; try and practice some simple problems that we have covered
+- make sure you understand how to make some simple operations with R:
+  - loading a dataset
+  - filtering data / selecting variables / computing new variables / summarizing
+- make sure you understand basic plotting functions (ggplot2)
+  - how to created a histogram, a scatterplot, a boxplot
+- make sure you know how to summarize posterior distribution:
+  - how to compute point-estimates
+  - how to compute credible intervals, and HPDI's
+  - how to conduct equivalence tests
+- make sure you know how to examine results of MCMC simulations:
+  - what are R-hats and ESS? what values should they have to accept simulation resullts
+  - how to examine traceplots and auto-correlations plots, how should they look like; when you should be afraid
+  
