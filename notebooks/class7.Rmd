@@ -1,0 +1,501 @@
+---
+title: "Class 7"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(haven)
+theme_set(theme_classic())
+```
+
+
+# 1. Linear models
+
+While exploring your data you may found that many of variables (like IQ, personality scores, other test scores) tend to be distributed in a way that resembles a bell curve. This is especially likely, when the variables are created by summing or averaging scores over many occasions (e.g. various tasks in an intelligence test or various items in a personality questionnaire).
+That bell curve is known as Normal or Gaussian distribution, and is one of the central concepts in statistical modeling.
+Recall that any Normal distribution can be characterized by two parameters: mean and variance (or standard deviation). 
+While mean denotes central tendency (or expected value), variance denotes uncertainty about the values.
+The main aim of any statistical modeling is to DECREASE THE UNCERTAINTY ASSOCIATED WITH OBSERVED DATA.
+
+```{r}
+set.seed(2345)
+predictor <- rnorm(1000)
+outcome <- 2*predictor + rnorm(1000, mean = 0, sd = 1)
+sample_data <- tibble(predictor, outcome)
+
+sample_data %>% 
+  ggplot()+
+  geom_histogram(aes(outcome, y = ..density..),fill = "red", alpha = 1/2)+
+  geom_vline(xintercept = mean(sample_data$outcome), colour = "red", size = 1.5)+
+  stat_function(fun = dnorm, args = list(mean = mean(sample_data$outcome), 
+                                         sd = sd(sample_data$outcome)),
+                colour = "red", size = 1.5)
+```
+
+Uncertainty can be usually reduced by finding some other variable (or variables), that can be used in modeling values of the outcome variable.
+Linear models assume that the outcome variable's values can be described as a weigthed sum of other variable (or variables) - predictor(s) and a bias term (also called an intercept).
+
+$$
+outcome = weight_1 \times predictor_1 + weight_2 \times predictor_2 + \ldots + weight_n \times predictor_n + bias
+$$
+
+With just one predictor such a model can be presented as a linear relationship. 
+Below you can find a scatterplot with values of some outcome variable and some predictor.
+The line refers to parameters of the linear model (linear regression):
+- slope is related to the weight associated with the predictor
+- bias (or intercept) describes how much the line is shifted downward or upward
+
+Also, slope informs how much the value of the outcome variable changes when the predictor is increased by 1. 
+Intercept informs what is the value of the outcome variable when the value of predictor is 0.
+
+Try and appoximate values of slope and intercept of the line in the plot below.
+
+```{r}
+sample_data %>% 
+  ggplot(aes(predictor, outcome))+
+  geom_point(colour = "red", alpha = 1/5, size = 3)+
+  geom_abline(intercept = 0, slope = 2, colour = "red", size = 2)+
+  scale_y_continuous(limits = c(-8, 8), breaks = -8:8)+
+  scale_x_continuous(breaks = -4:3)
+```
+
+After finding a model that describes the relationship the best (a line that fits the scatter plot the best), we may assess a magnitude of error that we make when we use the model instead of the data. For each case we may compute the difference, which we will call a residual.
+
+$$
+residual = outcome_{observed} - outcome_{predicted}
+$$
+
+
+By plotting residuals againt the values of predictor variable you may find that uncertainty related with the outcome variable is now significantly reduced.
+
+```{r}
+sample_data$r_outcome <- resid(lm(outcome ~ predictor, data= sample_data))
+
+sample_data %>% 
+  ggplot(aes(predictor, r_outcome))+
+  geom_point(colour = "green", alpha = 1/5, size = 3)+
+  geom_abline(intercept = 0, slope = 0, colour = "green", size = 2)+
+  scale_y_continuous(limits = c(-8, 8))
+```
+
+See this direct comparison of both distributions.
+
+```{r}
+sample_data %>% 
+  ggplot(aes(x = outcome))+
+  stat_function(fun = dnorm, args = list(mean = 0, 
+                                         sd = sd(sample_data$outcome)),
+                colour = "red", size = 1.5)+
+  stat_function(fun = dnorm, args = list(mean = mean(sample_data$r_outcome), 
+                                         sd = sd(sample_data$r_outcome)),
+                colour = "green", size = 1.5)+
+  geom_text(aes(x=x, y=y, label=label), data = data.frame(x = -6, y=0.4, label = "Residual distribution"), colour = "green", size =5)+
+  geom_text(aes(x=x, y=y, label=label), data = data.frame(x = -6, y=0.35, label = "Outcome distribution"), colour = "red", size =5)
+```
+
+By computing variances of the residuals and of the outcome, dividing both, and substracting from 1, you can find how much of the initial variance is explained by the model.
+
+```{r}
+1-var(sample_data$r_outcome)/var(sample_data$outcome)
+```
+
+More formally in a Bayesian approach this can be written like this:
+$$
+outcome_i \sim Normal(\mu_i, \sigma) \\
+\mu_i = \beta \times predictor_i \\
+\beta \sim Normal(0, 10) \\
+\sigma \sim Student(3, 0, 10)
+$$
+$Normal(\mu, \sigma)$ means that each outcome is distributed according to Normal distribution with mean $\mu$ and standard deviation $\sigma$.
+$\mu$ is defined as a weighted sum of predictor values. $\sigma$ denote standard deviation of residuals (the part not explained by $\mu$).
+There are two parameters (unobserved quatities) in this model: $\beta$ and $\sigma$. Each needs to have a prior distribution assigned.
+With linear regreesion, we will usually assign Normal distribution to regression weights ($\beta$).
+
+```{r}
+ggplot(aes(x=x), data = data.frame(x=seq(-50,50, length.out = 50)))+
+  stat_function(fun=dnorm, args = list(mean = 0, sd = 10), colour="blue")+
+  labs(title = "Prior distribution for regression weights", x = "beta", y="")
+```
+
+Also we will usually assign half-Student distribution to variance of residuals ($\sigma$).
+
+```{r}
+dscaled_t <- function(x, sc, df){
+  dt(x/sc, df=df)
+}
+ggplot(aes(x=x), data = data.frame(x=seq(0,50, length.out = 50)))+
+  stat_function(fun=dscaled_t, args = list(df=3, sc=10), colour="blue")+
+  labs(title = "Prior distribution for standard deviation of residuals", x = "sigma", y="")
+```
+
+# 2. Linear regression
+
+We will proceed with real data from a recent study on correlates of feelings of lack of control. Below you will find a code that loads a dataset to R, and gives an initial summary.
+There are two variables that will interest us:
+- the outcome variable is `sumPro` - participants were asked to list all their personal projects (e.g. get a better paid job, pass the exams, go to vacation, etc.) that they plan to realize in the near future; the values in the column describe how many of such projects each participant listed
+- the predictor is `zFBK` - a score of questionnaire that measures perceived fatalistic lack of control (e.g. `My fate is sealed`, `No matter how hard I try, I know that won't change anything in my life`)
+
+```{r}
+real_data <- read_sav("bam_class7_data.sav")
+glimpse(real_data)
+```
+
+The values of `zFBK` are standardized. In most of the cases, you will want to standardize your predictors (and sometimes also the outcome variable), to make it easier to assign proper prior distribution. Do it by default, unless you have a good reason for not doing it. Here is a code that explains how to do it:
+
+```{r}
+real_data <- real_data %>% 
+  mutate(zFBK = (FBK - mean(FBK, na.rm=T)) / sd(FBK, na.rm=T) )
+```
+
+We would like to examine, whether the number of personal projects can be explained by feelings of lack control. If yes, whether the relationship is positive (the greater the feelings of lack control the more personal projects each participant had), or negative (the greater the feelings of lack of control the less personal projects each participants had). 
+
+We will start with drawing a scatterplot of both variables. I am using `geom_jitter` to plot points with some additional noise for greater visibility.
+
+```{r}
+real_data %>% 
+  ggplot(aes(zFBK, sumPro))+
+  geom_jitter()+
+  labs(x="Feelings of lack of control (z-score)", y="Sum of personal projects")+
+  scale_y_continuous(breaks=0:10)
+```
+
+We will use `brms` to fit a simple linear regression model. We will start with loading the package, and then will use a handy function `get_prior` to see the table of parameters alongside their prior distributions. 
+Some parameters have assigned default priors (Intercept and sigma). But prior for regression weight is not assigned.
+
+```{r}
+library(brms)
+get_prior(sumPro ~ zFBK, 
+          data = real_data)
+```
+
+We will create a prior object for class `b` (i.e. regression weights). We will use Normal prior with mean = 0, and standard deviation = 10.
+```{r}
+prior_reg_weights <- prior(normal(0, 10), class = b)
+prior_reg_weights
+```
+
+We can now fit our model.
+The formula is straightforwad. On the left-hand side we define the outcome variable, and on the right-hand side we define predictor variable. Recall, that you don't have to define the intercept, as it is defined by default.
+Next, we include a reference to our dataset, `real_data`.
+We define our prior, by using the prior object that we have created before.
+Lastly, we define family as `gaussian`, i.e. Normal.
+
+```{r}
+fit1 <- brm(sumPro ~ zFBK,
+            data = real_data,
+            prior = prior_reg_weights,
+            family = gaussian())
+```
+
+We can now print our model. Check Rhat values and ESS first.
+We can see that the intercept is equal to 2.32, 95% CI [2.09, 2.54]. Thus participants with feelings of lack of control equal to 0 (i.e. the sample average) had listed a little bit more than 2 personal projects.
+
+The regression weight associated with values of `zFBK` is equal to -0.73, 95% CI [-0.96, -0.50].
+- this coefficient is negative - how would you interpret it?
+- the credible interval does not include region around 0 - what does this mean?
+
+We can also see that $\sigma$ is equal to 2.00, 95% CI [1.84, 2.17]. Some proportion of variance of the outcome variable is still unexplained.
+
+```{r}
+fit1
+```
+
+How good our model performs? There are several ways to examine it. We will cover them latter. In classical statistics, one frequently looks at the proportion of explained variance, $R^2$ (see how it was computed in the intro). 
+
+Model 1 explains $R^2$ 12%, 95% [6%, 19%] of variance of the outcome variable.
+
+```{r}
+bayes_R2(fit1)
+```
+
+We can also print the fitted regression line. Note, that below I am using an option `spaghetti`. The regression lines are drawn separately for a sample of 50 MCMC draws from the posterior distribution. This gives us an idea of how regression lines look like, and how (un)certain we are about them.
+In the case of ideally uncertain relationship half of the lines would indicate positive relationship, and half would indicate negative relationship. Yet, in our case all draws seem to support a negative relationship.
+
+```{r}
+marginal_effects(fit1, "zFBK", spaghetti = T, nsamples = 50)
+```
+
+Below you will find a plot with additional tweaks. 
+
+```{r}
+marginal_effects(fit1, "zFBK", spaghetti = T, nsamples = 300) %>% 
+  plot(points = T, point_args = list(width = 0.2, height = 0.2), plot=F) %>% 
+  .[[1]] +
+  labs(x="Feelings of lack of control (z-score)", y="Sum of personal projects")
+```
+
+With the package `bayestestR` you can do additional more formal analysis of the model coefficients.
+```{r}
+library(bayestestR)
+```
+
+First, `p_direction` informs us about the probability that the effect is in the direction of the mean. Thus, if the mean of regression weight assicated with `zFBK` is negative, what is the probability that the effect is negative.
+
+```{r}
+p_direction(fit1)
+```
+
+Second, `equivalence_test` test the null hypothesis that the effect is not within the ROPE (region of practical equivalence). In this case, the default ROPE is used, based on the value of $\sigma$ taken from the model fit.
+
+```{r}
+equivalence_test(fit1)
+```
+
+Third, `bayesfactor_parameters` may be used to assess the strength of evidence that the value of regression weights are different than the null (0).
+
+```{r}
+bayesfactor_parameters(fit1)
+```
+
+
+# 3. Robust linear regression
+
+Sometimes extreme and unusual observations will occur in our data. These values may be perfectly valid, but sometimes they may be a result of some external factors (e.g. wrongly coded data, wrongly understood instructions, etc.). 
+
+Below you will find a code that creates such artificial outliers. This outliers may bias results of your analysis. In such instances, you should always ask yourself what to with that.
+
+```{r}
+real_data$sumProOut <- real_data$sumPro
+real_data$sumProOut[20] <- 20
+real_data$sumProOut[34] <- 18
+real_data$sumProOut[49] <- 16
+
+real_data %>% 
+  ggplot(aes(zFBK, sumProOut))+
+  geom_jitter()+
+  labs(x="Feelings of lack of control (z-score)", y="Sum of personal projects (with fake outliers)")
+```
+
+
+Lets try and fit our simple regression model with the variable that includes these outliers.
+
+```{r}
+fit2 <- brm(sumProOut ~ zFBK,
+            data = real_data,
+            prior = prior,
+            family = gaussian())
+```
+
+Look at the fitted model and compare the results to `fit1`.
+
+```{r}
+fit2
+```
+
+```{r}
+marginal_effects(fit2, "zFBK", spaghetti = T, nsamples = 300) %>% 
+  plot(points = T,
+       point_args = list(width = 0.2, height = 0.2)) %>% 
+  .[[1]] +
+  labs(x="Feelings of lack of control (z-score)", y="Sum of personal projects (with outliers)")
+```
+
+Look at the formal tests. How their results would affect your conclusions.
+
+```{r}
+p_direction(fit2)
+```
+
+```{r}
+equivalence_test(fit2)
+```
+
+```{r}
+bayesfactor_parameters(fit2)
+```
+
+The Bayesian solution is to use some other form of likelihood. To make our model robust against outliers, we will use Student-t distribution.
+Note that the Student distribution have fatter tails (depending on the value of degrees of freedom). 
+
+These fatter tails make outliers more probable, and at the same time less influential.
+
+```{r}
+ggplot(data=data.frame(x=seq(-5, 5, length.out = 100)), mapping = aes(x=x))+
+  stat_function(aes(colour = "Normal likelihood"),
+                fun = dnorm, args = list(mean = 0, sd=1))+
+  stat_function(aes(colour = "Student likelihood (df=30)"),
+                fun = dt, args = list(df = 30))+
+  stat_function(aes(colour = "Student likelihood (df=3)"),
+                fun = dt, args = list(df = 3))+
+  labs(x="",y="",colour="")
+```
+
+Using Student likelihood is simple. You just replace `gaussian` family with `student`. Looking at prior summary, we see that we additional parameter $\nu$, i.e. degrees of freedom of the Student distribution. In other word rather than choosing some value, we may estimate it.
+High values of $\nu$ (greater than 30) will tell us that there are few outliers (and we may stay with `gaussian` family).
+Low values of $\nu$ will inform us (smaller than 30) that the model had to account for outliers.
+
+```{r}
+get_prior(sumProOut ~ zFBK,
+            data = real_data,
+            family = student())
+```
+
+We fit robust regression model with the code below.
+
+```{r}
+fit3 <- brm(sumProOut ~ zFBK,
+            data = real_data,
+            prior = prior,
+            family = student())
+```
+
+
+Compare results of model 3 to model 2 and 1.
+
+```{r}
+fit3
+```
+
+```{r}
+marginal_effects(fit3, "zFBK", spaghetti = T, nsamples = 300) %>% 
+  plot(points = T,
+       point_args = list(width = 0.2, height = 0.2)) %>% 
+  .[[1]] +
+  labs(x="Feelings of lack of control (z-score)", y="Sum of personal projects (with outliers)")
+```
+
+```{r}
+p_direction(fit3)
+```
+
+```{r}
+equivalence_test(fit3)
+```
+
+```{r}
+bayesfactor_parameters(fit3)
+```
+
+# 4. Polynomial linear regression
+
+When using simple regression models we assume that the relationship between the outcome and predictor(s) is linear. In other words, it can be presented as a straight line (and not sinusoid, parabola, hyperbola, etc.). 
+Using `geom_smooth` we may use exploratory tools that may inform us whether the assumption of linear relationship is justified.
+
+We see that, the smooth (loess) line is not necessarily close to a straight line. How would you describe such a relationship?
+
+```{r}
+real_data %>% 
+  ggplot(aes(zFBK, sumPro))+
+  geom_jitter()+
+  geom_smooth()+
+  labs(x="Feelings of lack of control (z-score)", y="Sum of personal projects")+
+  scale_y_continuous(breaks=0:10)
+```
+
+We could model such a relationship, with some custom, fancy mathemtical function.
+
+```{r}
+ex_fun <- function(x, weight, bias) {
+  1/(weight^x) + bias
+}
+ggplot(data=data.frame(x=seq(0, 5, length.out = 100)), mapping = aes(x=x))+
+  stat_function(fun = ex_fun, args = list(weight = 3, bias = 2))
+```
+
+However, recall that linear model assume that the outcome is a weighted sum of predictors (i.e. a linear function).
+
+$$
+outcome = weight_1 \times predictor_1 + bias
+$$
+
+Therefore, such a function cannot be fitted within a linear framework (but nevertheless can be fitted with `brms`).
+
+$$
+outcome = 1/(weight_1^{predictor_1}) + bias
+$$
+
+However, we can fit polynomial function safely. This would count as a linear model.
+
+$$
+outcome = weight_1 \times predictor_1 + weight_2 \times predictor_1^2 + weight_3 \times predictor_1^3 + bias
+$$
+
+```{r}
+poly_fun <- function(x, a,b,c=0,d=0) {
+  a + b*x + c*x^2 + d*x^3
+}
+ggplot(aes(x), data=data.frame(x=seq(-2,2, length.out = 100))) +
+  stat_function(aes(colour = "1.linear"),fun = poly_fun, args = list(a=1, b = 1))+
+  stat_function(aes(colour = "2.quadratic"),fun = poly_fun, args = list(a=1, b = 1,c=1))+
+  stat_function(aes(colour = "3.cubic"),fun = poly_fun, args = list(a=1, b = 1, c=1, d=1))+
+  labs(colour="Trend")
+```
+
+
+Below, we are fitting a 2nd degree polynomial regression. We are using function `poly` that makes polynomial for us.
+`poly(predictor 2)` would fit a 2nd degree polynomial, while for example `poly(predictor, 3)` would fit a 3rd degree polynomial.
+
+```{r}
+#fit4 <- brm(sumPro ~ zFBK + I(zFBK^2),
+#            data = real_data,
+#            prior = prior,
+#            family =  gaussian())
+
+fit4 <- brm(sumPro ~ poly(zFBK, 2),
+            data = real_data,
+            prior = prior,
+            family =  gaussian())
+```
+
+In the model output, we have now two regression weights, the first, `polyzFBK1`, describes linear term, while the second, `polyzFBK2`, describes the quadratic term.
+
+```{r}
+fit4
+```
+
+By plotting the effects we can see how including the quadratic term affected our model.
+
+```{r}
+marginal_effects(fit4, "zFBK", spaghetti = T, nsamples = 300) %>% 
+  plot(points = T,
+       point_args = list(width = 0.2, height = 0.2))
+```
+
+We can formally test the quadratic coefficient to check whether we should leave it on our model. 
+```{r}
+p_direction(fit4)
+```
+
+```{r}
+equivalence_test(fit4)
+```
+
+```{r}
+bayesfactor_parameters(fit4)
+```
+
+## Your turn
+
+The dataset we used has 4 additional, potentially interesting outcome variables:
+- self-reported anger
+- self-reported depression
+- self-reported anhedonia
+- self-reported anxiety
+
+```{r}
+glimpse(real_data)
+```
+
+Choose one outcome, and examine how it is related to `zFBK`. 
+Check all the models we have covered during this class, and choose one. Report and interpret the results.
+At home write a short summary of your findings.
+
+The report should have maximum 1 page of text (single space, 10pt, Times New Roman), but the number of figures is unlimited, provided that they are referred to in the text. I WILL NOT READ LONGER REPORTS.
+
+The report should include the following sections:
+- aim of the analysis
+- variables used in the analysis
+- a short description of the model chosen to conduct analysis
+- information about MCMC sampling procedure (whether Rhat and ESS were OK)
+- information about results and their interpretation
+- short summary
+
+
+
+
+
+
+
+
+
