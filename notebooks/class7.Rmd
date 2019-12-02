@@ -137,7 +137,7 @@ There are two variables that will interest us:
 - the predictor is `zFBK` - a score of questionnaire that measures perceived fatalistic lack of control (e.g. `My fate is sealed`, `No matter how hard I try, I know that won't change anything in my life`)
 
 ```{r}
-real_data <- read_sav("bam_class7_data.sav")
+#real_data <- read_sav("bam_class7_data.sav")
 glimpse(real_data)
 ```
 
@@ -273,7 +273,7 @@ Lets try and fit our simple regression model with the variable that includes the
 ```{r}
 fit2 <- brm(sumProOut ~ zFBK,
             data = real_data,
-            prior = prior,
+            prior = prior_reg_weights,
             family = gaussian())
 ```
 
@@ -336,7 +336,7 @@ We fit robust regression model with the code below.
 ```{r}
 fit3 <- brm(sumProOut ~ zFBK,
             data = real_data,
-            prior = prior,
+            prior = prior_reg_weights,
             family = student())
 ```
 
