@@ -1,0 +1,392 @@
+---
+title: "Class 8"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(haven)
+```
+
+
+# Regression with categorical variables
+
+In this class, we will focus on Bayesian regression with categorical variables. You may remember that such type of regression is equivalent to conducting t-test or one-way ANOVA (in case of more than 2 factor levels).
+
+We will use a real dataset from a recently published article on sources of belief in conspiracy theories.
+
+```{r}
+s3 <- read_csv("study3.csv", na = "-999")
+s3 <- s3 %>% 
+  mutate(gender = factor(gender, levels = c("k","m"), labels = c("female","male")),
+         cond = factor(cond))
+```
+
+The main focus of our analysis will be a variable named `jc_mean`.
+This is a composite score derived from a scale of belief in Jewish conspiracy.
+Example statements from the scale are:
+- Jews aim at influencing the world economy
+- Jews act in a secret way
+- Jews would like to rule the world
+
+```{r}
+glimpse(s3)
+```
+
+First, lets focus on one categorical variable that can be used to explain endorsement of Jewish conspiracy theory: gender. In case of this study gender was treated as a binary variable with two levels: female and male.
+
+```{r}
+s3 %>% 
+  count(gender)
+```
+
+To use such variable in a regression we have to properly code its values. Recall, that regression analysis assumes that predictors are numeric variables and not characters. We will use another variable which indicates levels of this binary variable, so that women are encoded as 0 and men are encoded as 1 (you could also use 1 for women and 0 for men, this would not change your substantive conclusions).
+
+Such way of encoding is sometimes names as `dummy coding` or in R as `treatment` contrasts (although the name `treatment` is not adequate in this context).
+
+
+```{r}
+tibble(
+  category = rep(c("female","male"), each = 3),
+  dummy = rep(0:1, each = 3)
+)
+```
+
+Note that with such way of coding we can interpret the regression Intercept as estimated mean in group coded with 0 (here women) and we can interpret regression Slope as estimated difference between groups coded with 0 and 1 (here between men and women).
+
+```{r}
+tibble(dummy = 0:1, DV = c(12, 8)) %>% 
+  ggplot(aes(x=dummy, y=DV))+
+  geom_line()+
+  geom_vline(xintercept = c(0,1), linetype=2)+
+  geom_hline(yintercept = c(8,12), linetype=3)+
+  scale_x_continuous(breaks = 0:1, labels = c("0-female","1-female"))+
+  scale_y_continuous(limits =c(5,15))
+```
+
+
+To fit our model, lets load our basic library - `brms`.
+
+```{r}
+library(brms)
+```
+
+Lets look at basic summary of our outcome variable - jc_mean.
+
+```{r}
+s3 %>% 
+  summarise(M = mean(jc_mean, na.rm=T), SD = sd(jc_mean, na.rm=T))
+```
+
+```{r}
+s3 %>% 
+  ggplot(aes(x=jc_mean))+
+  geom_density()
+```
+
+
+Now lets, look at the default prior for our model. We see that prior for the Intercept and sigma have been already set. 
+Note also that prior for Intercept was set to student_t(3,3,10). This is Student distribution with 3 degrees of freedom, scale (sd) of 10 and mean equal to 3. The last parameter (mean) is set to the sample mean of 3 (i.e. if the mean of jc_mean was 10, it would be set to 10). We should set prior on parameter b - denoting a difference between men and women.
+
+```{r}
+get_prior(jc_mean ~  gender, 
+           data = s3)
+```
+
+Let set prior for the difference as Normal distribution with mean 0 and standard deviation of 1.
+
+```{r}
+prior1 <- prior(normal(0, 1), class = b)
+```
+
+```{r}
+tibble(b = seq(-4,4, length.out = 100)) %>% 
+  ggplot(aes(x=b))+
+  stat_function(fun = dnorm, args = list(mean = 0, sd = 1))
+```
+
+Why standard deviation of 1? Recall that the standard deviation of our outcome variable is also close to 1. It is thus rather unlikely that the difference between men and women is higher than the standard deviation in the total sample. Think about why this is the case.
+
+You can also review some recommendations for setting prior distributions in Bayesian models [here](https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations)
+
+In your own example look at the total variance (standard deviation) of your outcome variable and adjust your prior accordingly.
+
+Now, lets fit our model. 
+
+Note that although gender is a categorical variable, we can still use it as predictor in our regression analysis. This is because, behind the scene, it is automatically recoded into a dummy variable, as the one we discussed a few minutes ago. 
+
+```{r}
+fit1 <- brm(jc_mean ~ gender, 
+           data = s3,
+           prior = prior1,
+           seed = 1234)
+```
+
+Now, we can interpret our model.
+
+```{r}
+fit1
+```
+
+You can plot fitted values along with credible intervals using `marginal_effects()`.
+
+```{r}
+marginal_effects(fit1)
+```
+
+And summarize means and HDIs with a function `emmeans()` from a package called `emmeans`.
+
+```{r}
+library(emmeans)
+emmeans(fit1, ~gender)
+```
+
+There are also other ways to visualize your results. One way is to use functions in a package called `tidybayes`. This requires good knowledge of R and some hand-crafting. However, with a little bit of experience you should be able to create such graph by yourself.
+
+One useful plot for summarizing posterior distribution is a half-eye plot.
+It consists of densities of posterior distribution, and interval summaries.
+By default, the bold lines indicate 66% credible intervals and thin lines indicate 95% credible intervals.
+
+```{r}
+library(tidybayes)
+library(modelr)
+theme_set(theme_tidybayes())
+s3 %>% 
+  data_grid(gender) %>% 
+  add_fitted_draws(fit1) %>% 
+  ggplot(aes(x=.value, y=gender))+
+  geom_halfeyeh(aes(fill = gender))+
+  labs(x="Belief in Jewish conspiracy", y = "Gender")+
+  guides(fill=F)
+```
+
+Another way is summarizing just intervals. Here you can see 95%, 80%, 50% credible intervals.
+
+```{r}
+s3 %>% 
+  data_grid(gender) %>% 
+  add_fitted_draws(fit1) %>% 
+  ggplot(aes(x=.value, y=gender))+
+  stat_intervalh()+
+  labs(x="Belief in Jewish conspiracy", y = "Gender")
+```
+
+
+You can also use `equivalence_test()` to examine model parameters. Note that ROPE is set as [-0.11, 0.11]. In other words it includes values 10 times smaller than standard deviation of the total sample. Such values can be regarded as neglible effects according to Cohen's guidelines.
+
+```{r}
+library(bayestestR)
+equivalence_test(fit1)
+```
+
+We can plot the results of equivalence test.
+
+```{r}
+equivalence_test(fit1) %>% 
+  plot()
+```
+
+Alterantively, you can use Bayes factor to estimate evidence against the null after observing data.
+
+```{r}
+bayesfactor_parameters(fit1)
+```
+
+You can also plot the results of Bayes factor analysis.
+
+```{r}
+bayesfactor_parameters(fit1) %>% 
+  plot()
+```
+
+# Comparing means adjusted for covariates
+
+Imagine that you publish your results. You interpret the difference between men and women by referring to masculinity crisis. 
+According to your reasoning, men are unsure of their social position and thus more prone to perceive some groups as influential and hostile.
+
+However, reviewers disagree with such as reasoning. They claim that men may be overall more prone to believe that the world is driven by conspiracies. They believe that controlling for conspiracy mentality, no difference in belief in Jewish conspiracy between men and women would be observed. 
+
+What exactly "controlling for" means here? It means examining differences between men and women, for the level of conspiracy mentality being equal. Think of it as pairing men and women into groups with the same value of conspiracy mentality, and the making separate comparisons within each group.
+
+Lets start with simpler example. On the plot below you can see a scatterplot with a fitted regression line between x and y. The plot indicates that there is a credible relationship between both variables.
+
+```{r}
+set.seed(2134)
+tibble(x = c(rnorm(50),rnorm(50,2)),
+       gender = rep(c("women","men"), each = 50),
+       y =  c(1 + rnorm(50), 3 + rnorm(50))) %>% 
+  ggplot(aes(x,y))+
+  geom_point()+
+  geom_smooth(method = "lm")
+```
+
+However, when we take into account gender as an additional variable and examine the relationship between x and y separately for men and women, we see something else: There is almost no relationship between x and y.
+Our spurious relationship resulted from the fact that men had higher values of both x and y than women. Neglecting this difference resulted in incorrect inference about the relationship between x and y.
+
+```{r}
+set.seed(2134)
+tibble(x = c(rnorm(50),rnorm(50,2)),
+       gender = rep(c("women","men"), each = 50),
+       y =  c(1 + rnorm(50), 3 + rnorm(50))) %>% 
+  ggplot(aes(x,y, colour = gender))+
+  geom_point()+
+  geom_smooth(aes(fill=gender),method = "lm")
+```
+
+Now lets try something else. Here our focal variable is gender: We want to estimate a difference between men and women. On the plot below, we see that there seems to be a credible difference between men and women. However, we have also strong reason to believe that men and women credibly differ in x - an important variable known to be related to y.
+
+```{r}
+set.seed(2134)
+tibble(x = c(rnorm(50),rnorm(50,2)),
+       gender = rep(c("women","men"), each = 50),
+       y =  c(1 + x[1:50] + rnorm(50), 1 + x[51:100] + rnorm(50))) %>% 
+  ggplot(aes(gender,y, fill=gender))+
+  geom_boxplot()+
+  guides(fill=F)
+```
+
+Look at the plot below. We see that x is credibly related to y. Also men seems to have higher values of x.
+
+```{r}
+set.seed(2134)
+tibble(x = c(rnorm(50),rnorm(50,2)),
+       gender = rep(c("women","men"), each = 50),
+       y =  c(1 + x[1:50] + rnorm(50), 1 + x[51:100] + rnorm(50))) %>% 
+  ggplot(aes(x,y))+
+  geom_point(aes(colour = gender))+
+  geom_smooth(method="lm")+
+  guides(fill=F)
+```
+
+Lets look at residuals of y regressed on x. In other words, for each observation lets compute a difference between observed and predicted value of y. Residuals are by definition not correlated with x. Lets plot residuals against x along with the information about participants gender.
+
+```{r}
+set.seed(2134)
+tibble(x = c(rnorm(50),rnorm(50,2)),
+       gender = rep(c("women","men"), each = 50),
+       y =  c(1 + x[1:50] + rnorm(50), 1 + x[51:100] + rnorm(50))) -> exDf
+
+exDf$res_y <- exDf %>% 
+  lm(y ~ x, data = .) %>% 
+  resid()
+
+exDf %>% 
+  ggplot(aes(x,res_y))+
+  geom_point(aes(colour = gender))+
+  geom_smooth(method="lm")+
+  labs(y="Residual y")+
+  guides(fill=F)
+```
+
+Now, comparing residual y between men and women result in almost no credible difference.
+
+```{r}
+exDf %>% 
+  ggplot(aes(gender,res_y, fill=gender))+
+  geom_boxplot()+
+  guides(fill=F)+
+  labs(y = "Residual y")
+```
+
+We don't need to precompute residuals to conduct such analysis with our models. Instead, we can use multiple regression that will yield the same result.
+
+Before, moving on lets standardize the variable denoting conspiracy mentality.
+
+```{r}
+s3 <- s3 %>% 
+  mutate(cm_mean_z = (cm_mean - mean(cm_mean, na.rm=T))/sd(cm_mean, na.rm=T))
+```
+
+Lets examine our model priors. Note that the formula is simple. On the right hand-side we just include all the variable that we would to use as predictors, separated by `+`. 
+
+```{r}
+get_prior(jc_mean ~ gender + cm_mean_z,
+            data = s3)
+```
+
+Both `cm_mean_z` and `gendermale` are of the same class `b`. Thus, if we assign prior as `prior(normal(0, 1), class = b)`, it will refer to both predictors.
+
+```{r}
+prior2 = prior(normal(0, 1), coef = cm_mean_z) + prior(normal(0, 1), coef=gendermale)
+## it the same as
+prior2 = prior(normal(0, 1), class = b)
+```
+
+Lets fit our model.
+
+```{r}
+fit2 <- brm(jc_mean ~ gender + cm_mean_z,
+            data = s3,
+            prior = prior2,
+            seed = 1234)
+```
+
+Now, we will examine our model. Compare the results with `fit1`.
+
+```{r}
+fit2
+```
+
+We see, that conspiracy mentality is credibly related to belief in Jewish conspiracy (even accounting for a difference between men and women).
+
+```{r}
+marginal_effects(fit2, "cm_mean_z")
+```
+
+We still observe a credible difference between men and women in belief in Jewish conspiracy, even after accounting for the level of conspiracy mentality.
+
+```{r}
+marginal_effects(fit2, "gender")
+```
+
+We can once again print estimated marginal means. These means are adjusted for the difference between men and women. Compare it with estimated from `fit1`.
+
+```{r}
+emmeans(fit2, ~ gender)
+```
+
+Equivalence test in this case also results in rejecting the null.
+
+```{r}
+equivalence_test(fit2)
+```
+
+Interestingely, Bayes factor in support for the hypthesis of difference between men and women is even larger than before.
+
+```{r}
+bayesfactor_parameters(fit2)
+```
+
+Given that both models resulted in the same conclusion, should we thus stay with `fit1` or use `fit2` instead?
+This will be covered later, but you can make the decision by comparing the value the so called 'information criteria'. One popular criterion is LOOIC = Leave-One-Out Information Criterion. I will explain it in detail later, but right now all you need to know is that, the lower value of IC means better fit.
+
+LOO for `fit1` is presented here.
+
+```{r}
+fit1 <- add_criterion(fit1, criterion = "loo")
+fit1$loo
+```
+
+LOO for `fit2` is presented here.
+
+```{r}
+fit2 <- add_criterion(fit2, criterion = "loo")
+fit2$loo
+```
+
+It seems like LOOIC for `fit1` is smaller that LOOIC for `fit2`. The difference is high relative to its standard error.
+
+```{r}
+loo_compare(fit2, fit1, criterion = "loo")
+```
+
+
+
+
+
+
+
+
+
