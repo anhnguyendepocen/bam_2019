@@ -1,0 +1,239 @@
+---
+title: "Class 9"
+output: html_notebook
+---
+
+
+# Analyzing interactions
+
+```{r}
+library(tidyverse)
+library(emmeans)
+library(brms)
+library(bayestestR)
+```
+
+# Various forms of two-way interactions
+
+Basically an interaction means that the difference in the level of some DV between levels of some variable X depends on the value of some third variable M. Sometimes, we say that variable M (*moderator*) moderates a relationship between DV and a *focal predictor* X.
+
+```{r}
+tibble(
+  X = rep(c("level 1", "level 2"), each = 2),
+  M = rep(c("level a", "level b"), 2),
+  DV = c(4,7,6.5,3.5)
+) %>% 
+  ggplot(aes(X, DV, fill = M))+
+  geom_col(position = "dodge", colour = "black")+
+  ggtitle("Interaction between 2 binary predictors")
+```
+
+Either X or M may be a continuous variable.
+
+```{r}
+tibble(
+  X = rep(seq(1,5, length.out = 5),2),
+  M = rep(c("level a", "level b"), each = 5),
+  DV = c(X[1:5]*0.5 + 3, X[6:10]*-0.3 + 5)
+) %>% 
+  ggplot(aes(X, DV, group = M))+
+  geom_line(aes(colour = M))+
+  ggtitle("Interaction between a continuous and a binary predictor")
+```
+
+We can also treat a categorical variables as a focal predictor and a continuous variable as a moderator. In such case, we would plot differences between levels of categorical for potential levels of moderator (usually mean and +/- 1 SD).
+
+```{r}
+tibble(
+  X = rep(c("level 1", "level 2"), each = 3),
+  M = as.factor(rep(c(-1,0,1), 2)),
+  DV = c(4,5.5,7,8,6,4)
+) %>% 
+  ggplot(aes(X, DV, fill = M))+
+  geom_col(position = "dodge", colour = "black")+
+  ggtitle("Interaction between a continuous and a binary predictor")
+```
+
+
+Finally, both X and M may be continuous variables.
+
+```{r}
+tibble(
+  X = c(1, 5, 1, 5, 1, 5),
+  M = as.factor(c(-1, -1, 0, 0, 1, 1)),
+  DV = c(3,5.1, 4, 4.25, 5.5, 2.90)
+) %>% 
+  ggplot(aes(X, DV, group = M))+
+  geom_line(aes(colour = M))+
+  ggtitle("Interaction between two continuous variables")
+```
+
+
+In mathematical notation, we can describe any interaction as:
+
+$$
+\mu_i = \beta_0 + \beta_1x_{1i} + \beta_2  x_{2i} + \beta_3  x_{1i}  x_{2i}
+$$
+
+For example, in the table below we see that the interaction term (int) is just a product of x1 and x2:
+
+```{r}
+tibble(
+  x1 = rep(c(-1,1), each = 2),
+  x2 = rep(c(-1,1), 2),
+  int = x1 * x2
+)
+```
+
+Lets examine a possible interaction between gender and conspiracy mentality in the model predicting belief in Jewish conspiracy.
+
+```{r}
+s3 <- read_csv("study3.csv", na = "-999")
+s3 <- s3 %>% 
+  mutate(gender = factor(gender, levels = c("k","m"), labels = c("female","male")),
+         cond = factor(cond)) %>% 
+  mutate(cm_mean_z = (cm_mean - mean(cm_mean, na.rm=T))/sd(cm_mean, na.rm=T))
+
+glimpse(s3)
+```
+
+Recall that the basic formula in regression in R can be written as:
+
+```
+outcome_variable ~ predictor1 + predictor2 + predictor3
+```
+
+To define interaction, we need to add a third term - a product of 2 predictors. 
+
+```
+outcome_variable ~ predictor1 + predictor2 + predictor1:predictor2
+```
+
+This creates a rather lengthy expression. Instead we can write:
+
+```
+outcome_variable ~ predictor1 * predictor2
+```
+
+
+Lets see how our model looks like
+
+```{r}
+get_prior(jc_mean ~ gender * cm_mean_z,
+            data = s3)
+```
+
+Lets define the same prior distribution for all regression coef. parameters (i.e. all parameters from class b).
+
+```{r}
+prior1 = prior(normal(0, 1), class = b)
+```
+
+Now, we can fit our model.
+
+```{r}
+fit1 <- brm(jc_mean ~ gender * cm_mean_z,
+            data = s3,
+            prior = prior1,
+            seed = 1234)
+```
+
+Usually, before moving on we need to see whether the interaction term if different from 0. In this case it is. 
+
+```{r}
+fit1
+```
+
+This interaction can mean that the relationship between conspiracy mentality and endorsement of Jewish conspiracy theory depends on gender of participants. See how it can be described on the graph below.
+
+```{r}
+marginal_effects(fit1, "cm_mean_z:gender")
+```
+
+With a function `emtrends` we can compute slopes of regression lines separately for men and women.
+Inside this function we need to define:
+- the model object
+- a moderating variable as one sided formula (i.e. ~ followed by moderator name)
+- an argument `var` which denotes a continuous focal predictor
+
+```{r}
+emtrends(fit1, ~gender, var = "cm_mean_z")
+```
+
+Emtrends works perfectly with equivalence tests.
+
+```{r}
+emtrends(fit1, ~gender, var = "cm_mean_z") %>% 
+  equivalence_test(range = rope_range(fit1))
+```
+
+And with Bayes factors.
+
+```{r}
+emtrends(fit1, ~gender, var = "cm_mean_z") %>% 
+  bayesfactor_parameters(prior = fit1)
+```
+
+Equivalently, we can treat gender as focal predictor and treat conspiracy mentality as moderator. See the plot below.
+
+```{r}
+marginal_effects(fit1, "gender:cm_mean_z")
+```
+
+In the plot above, we had gender difference for mean and +/- 1 SD of moderator. However, due to some missing values mean and +/- 1 SD are not equal to 0 and +/- 1 (as should be the case with standardized variable). 
+
+To handle this issue, we can additional argument `int_conditions`. We should pass to it a data.frame with with moderator and its values (-1, 0, 1).
+
+```{r}
+marginal_effects(fit1, "gender:cm_mean_z", 
+                 int_conditions = data.frame(cm_mean_z = c(-1, 0, 1)))
+```
+
+We can use more that 3 values of moderator.
+
+```{r}
+marginal_effects(fit1, "gender:cm_mean_z", 
+                 int_conditions = data.frame(cm_mean_z = seq(-2, 2, length = 11)))
+```
+
+With a function emmeans we can compute means for men and women with different levels of conspiracy mentality.
+
+```{r}
+emmeans(fit1, ~gender|cm_mean_z, at = list(cm_mean_z = c(-1,0,1)))
+```
+
+And we can compute pairwise differences with a function `pairs`.
+
+```{r}
+emmeans(fit1, ~gender|cm_mean_z, at = list(cm_mean_z = c(-1,0,1))) %>% 
+  pairs()
+```
+
+This also works with equivalence tests.
+
+```{r}
+emmeans(fit1, ~gender|cm_mean_z, at = list(cm_mean_z = c(-1,0,1))) %>% 
+  pairs() %>% 
+  equivalence_test(range = rope_range(fit1))
+```
+
+And with Bayes factors.
+```{r}
+emmeans(fit1, ~gender|cm_mean_z, at = list(cm_mean_z = c(-1,0,1))) %>% 
+  pairs() %>% 
+  bayesfactor_parameters(prior = fit1)
+```
+
+[Here](https://stats.idre.ucla.edu/r/seminars/interactions-r/#s3) you can find more documentation on how to decompose interactions with `emmeans`.
+
+
+## Your turn
+
+- Conduct a similar analysis on either `gc_mean` (belief in German conspiracy) or `rc_mean` (belief in Russian conspiracy).
+
+
+## At home
+
+Write a short max. 3 pages report where you will examine whether conspiracy mentality (`cm_mean_z`) and age of participants (`age`) predict belief in Jewish, German, and Russian conspiracy. You should decompose any significant interaction you encounter.
+
+

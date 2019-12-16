@@ -1,4 +1,4 @@
-# Home assignment 3
+# Home assignment 4
 
 The dataset used during class 7 has 4 additional, potentially interesting outcome variables:
 - self-reported anger
