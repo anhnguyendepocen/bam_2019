@@ -1,0 +1,424 @@
+---
+title: "Class 10"
+output: html_notebook
+---
+
+# Bayesian generalized linear models
+
+## What are generalized linear models?
+
+Recall what we know about linear models:
+
+$$
+outcome_i \sim Normal(\mu_i, \sigma) \\
+\mu_i = \beta \times predictor_i \\
+$$
+
+Linear models assume that the outcome variable is distributed as Normal with its mean - $\mu$ being a linear combination of predictors' values and regression weights - $\beta$.
+
+However, often we will want to models variables that are not normally distributed. Specifically, we know that non-continuous variables are not normally distributed.
+
+Examples of non-Normal variables in psychological research:
+- conforming to the majority view (yes or no) - social conformity (Ash, 1951)
+
+```{r message=FALSE}
+library(tidyverse)
+tibble(conformed = c("no","yes"),
+       pct = c(25, 75)) %>%
+  ggplot(aes(conformed, pct))+
+  geom_col(colour="black", fill ="deepskyblue1")+
+  scale_x_discrete("Conformed with a majority view")+
+  scale_y_continuous("Percentage")
+```
+- number of correctly recalled trigrams - memory decay (Peterson & Peterson, 1959)
+
+```{r}
+tibble(recalled = 0:10) %>% 
+  ggplot(aes(recalled))+
+  stat_function(fun=dpois, args = list(lambda = 2), colour="black", fill ="deepskyblue1",
+                geom = "col", n=11)+
+  scale_x_continuous("Number of recalled trigrams", breaks = 0:10)+
+  scale_y_continuous("Proportion in sample")
+```
+
+- reaction times - Stroop task
+
+```{r}
+tibble(rt = 0:5) %>% 
+  ggplot(aes(rt))+
+  stat_function(fun=dlnorm, args = list(meanlog=0.25, sd=0.5), colour="black", fill="deepskyblue1", geom="area")+
+  scale_x_continuous("RT (in sec.)")+
+  scale_y_continuous("Proportion in sample")
+```
+
+- school grades - in educational psychology
+
+```{r}
+tibble(grade = c("2","3","3+","4","4+","5","5!"),
+       pct = c(8, 15, 14, 32, 21, 10, 2)) %>%
+  mutate(pct = pct / sum(pct)) %>% 
+  ggplot(aes(grade, pct))+
+  geom_col(colour="black", fill ="deepskyblue1")
+```
+
+
+Generalized linear models extend modeling capabilities to contexts where the outcome variable is non-Normal. In Bayesian approach it actually quite natural (as we have seen in the vampires example), to assume likelihood functions that are not Normal.
+
+$$
+outcome_i \sim Distribution(\eta_i) \\
+f(\eta_i) = \beta \times predictor_i \\
+$$
+
+Other distributions will not depend on the same parameters as Normal distribution (which depends on mean and standard deviation). 
+These parameters cannot always be represented as linear combination of predictors' values and regression coefficients. Therefore, they are usually transformed, through a so called `link function` (see next example).
+
+## Logistic regression
+
+In the example below, we have a continuous predictor - x - and a binary outcome variable - y.
+We can fit a simple linear regression to this data. The line would be interpreted as conditional probability of occurence of some outcome (which depends on some predictor values).
+There is a problem with such a solution.
+We know that probabilities cannot be lower than 0 or higher than 1. 
+Yet, we see that the fitted line predicts such impossible values.
+
+```{r}
+set.seed(1234)
+tibble(x = rnorm(100),
+       y = ifelse(1.25*x + rnorm(100) > 0, 1, 0)) %>% 
+  ggplot(aes(x,y))+
+  geom_point()+
+  geom_smooth(aes(colour = "linear fit"), method="lm", se = F)+
+  scale_y_continuous("Probability of conforming", breaks=0:1)+
+  scale_color_discrete("")
+```
+
+However, we can transform fitted values with the `logistic function`.
+
+$$
+f(x) = \frac{1}{1 + e^{-x}}
+$$
+
+You can see that this function transforms any unbounded continuous variable (i.e. ranging from $-\infty$ to $\infty$), to a variable that is bounded between 0 and 1. The tranformed variable never reaches 0 or 1. It is thus perfect for representing probabilites.
+
+```{r}
+simple_logit <- function(x){
+  1/(1 + exp(-x))
+}
+
+tibble(x = -4:5,
+       transformed_x = simple_logit(x))
+```
+
+See how it looks in our example.
+
+```{r}
+set.seed(1234)
+tibble(x = rnorm(100),
+       y = ifelse(1.25*x + rnorm(100) > 0, 1, 0)) %>% 
+  ggplot(aes(x,y))+
+  geom_point()+
+  geom_smooth(aes(colour = "linear fit"), method="lm", se = F)+
+  geom_smooth(aes(colour = "logistic fit"), method="glm", method.args = list(family = "binomial"), se = F)+
+  scale_y_continuous("Probability of conforming", breaks=0:1)+
+  scale_color_discrete("")
+```
+
+With the `logistic` function, we can represent our model with the outcome being a result of Bernoulli trials. 
+Bernouulli trials have only two outcomes. For example, tossing a coin with probability of obtaining heads equal to $p$ and probability of obtaining tails equal to $1 - p$.
+The value of $p_i$ depends on logit transformed combination of predictors' values and regression coefficients.
+
+$$
+outcome_i \sim Bernoulli(p_i) \\
+logit(p_i) = \beta \times predictor_i \\
+$$
+
+## Applied example 
+
+Lets check it with a simple example.
+```{r}
+data_log <- read_csv("conformity.csv")
+```
+
+These data comes from an experiment where participants with different level of authoritarianism interacted with a partner (who had either high or low status). Also, it was recorded whether participants conformed to orders issued by their interaction partner (0 = no, 1 = yes)
+```{r}
+data_log %>% 
+  glimpse()
+```
+
+Here, we can examine whether conforming to peer's order depends on the level of authoritarianism...
+
+```{r}
+data_log %>% 
+  ggplot(aes(fscore, conformed))+
+  geom_point()+
+  labs(x="Authoritarianism Scale score",
+       y="Conformed to a majority of partner's orders")+
+  scale_y_continuous(breaks=0:1)
+```
+
+...and whether conforming to peer's order depends on partner's status.
+```{r}
+data_log %>% 
+  ggplot(aes(partner.status, conformed))+
+  geom_jitter(width = 0.1, height = 0.1)+
+  labs(x="Partner status",
+       y="Conformed to a majority of partner's orders")+
+  scale_y_continuous(breaks=0:1)
+```
+
+Lets load `brms` to fit our initial model.
+
+```{r message=FALSE}
+library(brms)
+```
+
+Lets standardize `fscore`.
+
+```{r}
+data_log <- data_log %>% 
+  mutate(z_fscore = (fscore - mean(fscore)) / sd(fscore))
+```
+
+Lets examine our prior. Note that priors are similar as in a simple regression. The only exception is that there is no prior for $\sigma$ - standard deviation of residuals. This is because in logistic regression it is always fixed to 1.
+```{r}
+get_prior(
+  conformed ~ z_fscore,
+  data = data_log,
+  family = bernoulli()
+  )
+```
+
+Lets assign weakly informative prior to the regression coefficient.
+```{r}
+prior = prior(normal(0, 1), class = b)
+```
+
+Lets fit our model. Note that in this case, we have to specify a new likelihood family - Bernoulli.
+```{r}
+fit1 <- brm(
+  conformed ~ z_fscore,
+  data = data_log,
+  family = bernoulli(),
+  prior = prior,
+  seed = 2233
+)
+```
+
+Lets print our model.
+```{r}
+fit1
+```
+
+We can find out what is the proportion of the outcome variable variance explained by the predictors.
+```{r}
+bayes_R2(fit1)
+```
+
+To better understand what are the coefficients in our model, lets plot fitted values on a linear scale.
+The line that you see is directly related to the coefficients in the basic summary. It has an intercept around 0.24 and slope around -0.12.
+The presented result is a linear combination of predictors' values and regression coefficients,...
+```{r}
+marginal_effects(fit1, "z_fscore",scale="linear")
+```
+
+...however as we discussed this cannot be used in our case (probabilities cannot be lower than 0 and higher than 1).
+
+Thus, the fitted values are transformed into a response scale (with a logistic function).
+Viewing marginal effects reveals that in this experiment conformity was only weakly related to authoritarianism.
+```{r}
+marginal_effects(fit1, "z_fscore", spaghetti = T, nsamples = 400) %>% 
+  plot(points = T, line_args = list(colour="red"))
+```
+
+
+## Your turn
+Fit a logistic model named `fit2` where you examined whether conformity depends on `partner.status`. Plot the results with `marginal_effects` function.
+```{r}
+
+```
+
+
+Once you have your model you can estimate conditional means for each value of the predictor, and compare them.
+```{r}
+library(emmeans)
+emmeans(fit2, pairwise~partner.status)
+```
+
+Note that the estimated means are on a strange scale. This is because we have used the logistic transformation. To see results on the original scale, you should add additional argument.
+```{r}
+emmeans(fit2, pairwise~partner.status, type="response")
+```
+
+Also, note the pairwise comparisons are presente as odds ratios. What are them?
+
+Odds are another way of representing probability. 
+
+$$
+Pr = 0.5 \\
+Odds = \frac{1}{1}
+$$
+
+$$
+Pr = 0.75 \\
+Odds = \frac{3}{1}
+$$
+
+$$
+Pr = 0.25 \\
+Odds = \frac{1}{3}
+$$
+
+Then, the odds ratio is just the ratio of odds associated with different conditional probability values.
+$$
+Odds_1 = \frac{3}{1} \\
+Odds_2 = \frac{1}{3} \\
+OR = \frac{Odds_1}{Odds_2} = 9
+$$
+
+Finally, lets fit a model with interaction of both predictors.
+
+```{r}
+fit3 <- brm(
+  conformed ~ z_fscore*partner.status,
+  data = data_log,
+  family = bernoulli(),
+  prior = prior,
+  seed = 2233
+)
+```
+
+Lets print the results.
+```{r}
+fit3
+```
+
+Now, we cal plot the interaction.
+```{r}
+marginal_effects(fit3, "z_fscore:partner.status")
+```
+
+## Your turn
+Remember how to use `emtrends` to decompose interactions? Print slopes of `z_fscore` for each value of `partner.status`.
+```{r}
+
+```
+
+
+We can also be interested in the effect of `partner.status` for different values of `z_fscore`.
+```{r}
+marginal_effects(fit3, "partner.status:z_fscore", int_conditions = list(z_fscore = setNames(c(-1,1), c("low","high"))))
+```
+
+## Your turn
+Remember how to use `emmeans` to decompose interactions? Print pairwise comparisons of `partner.status` at different values of `z_fscore` (-1,0,1).
+```{r}
+
+```
+
+## Poisson regression (if we have some time)
+
+Another commonly used distribution is Poisson distribution. It is mostly used, when the outcome variable represents counts.
+For example a number of correctly recalled items, i.e. non-negative integers. 
+In such instances, we can have a number of participants who did not recall any item...
+
+```{r}
+tibble(recalled = 0:20) %>% 
+  ggplot(aes(recalled))+
+  stat_function(fun=dpois, args = list(lambda = .5), colour="black", fill ="deepskyblue1",
+                geom = "col", n=21)+
+  scale_x_continuous("Number of recalled trigrams", breaks = 0:20)+
+  scale_y_continuous("Proportion in sample")
+```
+
+...but also in case of easier task, our distribution can look more like Normal.
+```{r}
+tibble(recalled = 0:20) %>% 
+  ggplot(aes(recalled))+
+  stat_function(fun=dpois, args = list(lambda = 10), colour="black", fill ="deepskyblue1",
+                geom = "col", n=21)+
+  scale_x_continuous("Number of recalled trigrams", breaks = 0:20)+
+  scale_y_continuous("Proportion in sample")
+```
+
+Poisson distribution is particularly useful in such instances. It depends on only 1 parameter $\lambda$ which represents both mean and variance at the time. Interestingly, with increasing $\lambda$ Poisson distribution will look more and more similar to the Normal distribution.
+
+$$
+outcome_i \sim Poisson(\lambda_i) \\
+log(\lambda_i) = \beta \times predictor_i \\
+$$
+
+## Applied example
+
+Lets use some simulated data to see how to use Poisson regression.
+
+Suppose, we are interested in a relationship between age and memory. Participants aged from 18 to 70 were given a list of 11 trigrams. After several seconds, they were asked to recall all items. See the plot below.
+
+```{r}
+set.seed(3344)
+age = floor(runif(200, 18, 70))
+recalled_hat = exp(2-0.01*age + rnorm(200, 0, 0.005))
+recalled = rpois(200, recalled_hat)
+data_pois = tibble(age, recalled)
+
+data_pois %>% 
+  ggplot(aes(age, recalled))+
+  geom_point()+
+  labs(x="Age", y="Recalled trigrams (max. 11)")+
+  scale_y_continuous(breaks = 0:11)
+```
+
+Lets standardize age.
+
+```{r}
+data_pois <- data_pois %>% 
+  mutate(zAge = (age - mean(age)) / sd(age))
+```
+
+Although using Normal model would seem reasonable, Poisson regression will probably fit better.
+
+Lets look at prior for our model. We see that it looks similar to logistic regression. We do not have $\sigma$, because residuals standard deviation is represented by the parameter $\lambda$, which also represents mean.
+
+```{r}
+get_prior(
+  recalled ~ zAge,
+  data = data_pois,
+  family = poisson()
+  )
+```
+
+Lets use the same weakly informative prior to the regression coefficient.
+```{r}
+prior = prior(normal(0, 1), class = b)
+```
+
+Lets fit our model. Note that in this case, we have to specify a new likelihood family - Bernoulli.
+```{r}
+fit4 <- brm(
+  recalled ~ zAge,
+  data = data_pois,
+  family = poisson(),
+  prior = prior,
+  seed = 2233
+)
+```
+
+The results suggest that there is a negative relationship between age and the number of recalled items.
+```{r}
+fit4
+```
+
+Lets looks at the conditional effects. Although is not evident in this case, the line that you see is not perfectly straight.
+
+```{r}
+marginal_effects(fit4, "zAge", spaghetti = T, nsamples = 200) %>% 
+  plot(points = T, line_args = list(colour="red"))
+```
+
+
+
+## Home assignment
+
+- Read chapter 9 from McElreath - there you will learn about `maximum entropy distributions`. Prepare a simple description what are `maximum entropy distributions` and why they are used with generalized linear models. Why use more than one `maximum entropy distribution`? 
+Your description should be simple - imagine your preparing a description for your peer not familiar with advanced statistics. Word limit: 300.
+- Read chapter 10 from McElreath - for each type of generalized linear model presented there (i.e. Binomial regression, Poisson regression, Multinomial regression, and Event history analysis aka geometric model) present an applied example where such analysis could be used. The example should come from psychology. For each example, provide a reference to the literature. 
+
+

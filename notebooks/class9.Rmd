@@ -147,7 +147,7 @@ fit1
 This interaction can mean that the relationship between conspiracy mentality and endorsement of Jewish conspiracy theory depends on gender of participants. See how it can be described on the graph below.
 
 ```{r}
-marginal_effects(fit1, "cm_mean_z:gender")
+marginal_effects(fit1, "cm_mean_z:gender", spaghetti = T, nsamples = 200)
 ```
 
 With a function `emtrends` we can compute slopes of regression lines separately for men and women.
@@ -230,6 +230,46 @@ emmeans(fit1, ~gender|cm_mean_z, at = list(cm_mean_z = c(-1,0,1))) %>%
 ## Your turn
 
 - Conduct a similar analysis on either `gc_mean` (belief in German conspiracy) or `rc_mean` (belief in Russian conspiracy).
+
+```{r}
+fitR <- brm(rc_mean ~ gender * cm_mean_z,
+            data = s3,
+            prior = prior1,
+            seed = 1234)
+```
+
+
+```{r}
+fitG <- brm(gc_mean ~ gender * cm_mean_z,
+            data = s3,
+            prior = prior1,
+            seed = 1234)
+```
+
+
+
+```{r}
+marginal_effects(fitR, "gender:cm_mean_z")
+```
+
+
+```{r}
+fitG
+```
+
+```{r}
+marginal_effects(fitG, "gender:cm_mean_z")
+```
+
+
+```{r}
+s3 %>% 
+  select(age, cm_mean_z, jc_)
+```
+
+```{r}
+emtrends(fit1, ~age, var = "cm_mean_z", at = at = list(age = c(20,30,40)))
+```
 
 
 ## At home
