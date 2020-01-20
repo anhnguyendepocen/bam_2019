@@ -18,6 +18,7 @@ However, frequently the data that we collect posses some structure that may lead
 - multiple observations within participants
 - survey takers within counties within countries
 
+
 (Bayesian) hierarchical models are used to deal with the non-independence assumption. Moreover, such models may reveal some interesting properties of our data. They may also be used to better embrace uncertainty inherent in some experiemental designs.
 
 Hierarchical structure is easily adopted in Bayesian approach. 
