@@ -1,0 +1,461 @@
+---
+title: "Class 11"
+output: html_notebook
+---
+
+# Bayesian hierarchical models
+
+The major assumption in linear modeling states that the residuals are independent, i.e. not correlated with each other. 
+
+$$
+outcome_i = \beta \times predictor_i + \epsilon_i \\
+$$
+
+However, frequently the data that we collect posses some structure that may lead to violation of this assumption:
+- students within classes within schools
+- animals across different sites
+- panel data at different time points
+- multiple observations within participants
+- survey takers within counties within countries
+
+(Bayesian) hierarchical models are used to deal with the non-independence assumption. Moreover, such models may reveal some interesting properties of our data. They may also be used to better embrace uncertainty inherent in some experiemental designs.
+
+Hierarchical structure is easily adopted in Bayesian approach. 
+Below you can see an example of such a structure. 
+- $outcome_{ij}$ refers to the value of a variable `outcome` for i-th participant in j-th group, e.g. student 2 in class 4. 
+- the outcome variable is distributed as Normal with standard deviation $\sigma$, and mean $\mu_j$ - in other words each group (e.g. class) has it own mean
+- means for different groups (e.g. classes) are also distributed as Normal with mean $\gamma$ and standard deviation, $\tau$
+- note that $\gamma$, $\tau$, and $\sigma$ are the highest-level parameters and thus depend only on prior values of parameters
+- we could however extend our model for additional levels (e.g. students within classes within schools); that is, if we had enough data
+$$
+outcome_{ij} \sim Normal(\mu_{j}, \sigma) \\
+\mu_{j}  \sim Normal(\gamma_, \tau ) \\
+\\
+\gamma \sim Normal(0, 1) \\
+\sigma \sim HalfNormal(0, 10) \\
+\tau \sim Student(4, 0, 10)
+$$
+
+
+Lets see a similar model on a graph.
+
+```{r message=FALSE}
+library(tidyverse)
+library(cowplot)
+theme_set(theme_classic())
+set.seed(1010)
+lev1_mu <- 15
+lev1_sd <- 5
+lev2_mu <- rnorm(5, lev1_mu, lev1_sd)
+lev2_sd <- 2
+
+p1 <- tibble(parameter = seq(0, 30, length.out = 50)) %>% 
+  ggplot(aes(parameter))+
+  stat_function(fun=dnorm, args = list(mean=lev1_mu, sd=lev1_sd), 
+                geom = "area", alpha = 1/2, fill="skyblue")+
+  geom_vline(xintercept = lev2_mu, linetype=2, colour="red")+
+  labs(x="",y="",title = "Population level")
+
+p2 <- tibble(parameter = seq(0, 30, length.out = 50)) %>% 
+  ggplot(aes(parameter))+
+  stat_function(fun=dnorm, args = list(mean=lev2_mu[1], sd=lev2_sd), 
+                geom = "area", alpha = 1/3, fill="red")+
+  stat_function(fun=dnorm, args = list(mean=lev2_mu[2], sd=lev2_sd), 
+                geom = "area", alpha = 1/3, fill="red")+
+  stat_function(fun=dnorm, args = list(mean=lev2_mu[3], sd=lev2_sd), 
+                geom = "area", alpha = 1/3, fill="red")+
+  stat_function(fun=dnorm, args = list(mean=lev2_mu[4], sd=lev2_sd), 
+                geom = "area", alpha = 1/3, fill="red")+
+  stat_function(fun=dnorm, args = list(mean=lev2_mu[5], sd=lev2_sd), 
+                geom = "area", alpha = 1/3, fill="red")+
+  geom_vline(xintercept = lev2_mu, linetype=2, colour="red")+
+  labs(x="Parameter",y="",title = "Group level")
+
+plot_grid(p1,p2,ncol = 1)
+```
+
+Hierarchical models presented above are especially useful in the context of linear regression.
+
+$$
+outcome_{ij} \sim Normal(\mu_{ij}, \sigma) \\
+\mu_{ij} = \beta_{0j}  + \beta_{1j} \times x_{1ij}   \\
+\beta_{0j} \sim Normal(\gamma_0, \tau_0) \\
+\beta_{1j} \sim Normal(\gamma_1, \tau_1) \\
+\dots
+$$
+- Similarly, as in the example above $outcome_{ij}$ refers to value of the DV for participant i-th in group j-th. These values are distributed as Normal with mean $\mu_{ij}$ and standard deviation $\sigma$.
+- $\mu_{ij}$ is defined as linearly dependent on regression parameters - $\beta_{0j}$ and $\beta_{1j}$ and values of predictor variable $x_{ij}$.
+- Note that $\beta_{0j}$ and $\beta_{1j}$ depend on the cluster, that is, they are different for each cluster j-th.
+- The distribution of $\beta_{0j}$ and $\beta_{1j}$ (we call them - `random effects`) is also Normal with $\gamma_0$ and $\tau_0$ denoting parameters of population level intercept, and $\gamma_1$ and $\tau_1$ denoting parameters of population level slope.
+- $\gamma_0$, $\tau_0$, $\gamma_1$, $\tau_1$, and also $\sigma$ are the highest-level parameters and their distribution is described by prior distributions (not shown here)
+
+Lets see examples of such hierarchical models.
+
+Below you can see regression line with blue denoting population level regression and red denoting group-level regression lines.
+
+Note that the intercept varies between groups, but the slope is fixed (i.e. it is the same for each group).
+```{r}
+linreg <- function(x, intercept, slope){
+  intercept + slope * x
+}
+tibble(x = seq(0,30, length.out=5), y = seq(0,45, length.out = 5)) %>% 
+  ggplot(aes(x,y))+
+  stat_function(aes(colour="population"),fun=linreg, args = list(intercept=lev1_mu, slope=1), 
+                size=2)+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[1], slope=1))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[2], slope=1))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[3], slope=1))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[4], slope=1))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[5], slope=1))+
+  labs(x="",y="", colour="", title = "Same slope, varying intercepts")+
+  scale_color_manual(values=c("red","skyblue"))+
+  theme(legend.position = "top")
+```
+
+Next, you can see a situation where the intercept is fixed, but slopes vary between groups.
+```{r}
+set.seed(1011)
+lev2_slope <- runif(5, 0.5, 1.5)
+lev1_slope <- mean(lev2_slope)
+
+tibble(x = seq(0,30, length.out=5), y = seq(0,45, length.out = 5)) %>% 
+  ggplot(aes(x,y))+
+  stat_function(aes(colour="population"),fun=linreg, args = list(intercept=lev1_mu, slope=lev1_slope), 
+                size=2)+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev1_mu, slope=lev2_slope[1]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev1_mu, slope=lev2_slope[2]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev1_mu, slope=lev2_slope[3]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev1_mu, slope=lev2_slope[4]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev1_mu, slope=lev2_slope[5]))+
+  labs(x="",y="", colour="", title = "Varying slopes, same intercept")+
+  scale_color_manual(values=c("red","skyblue"))+
+  theme(legend.position = "top")
+```
+
+Finally, note a case where both intercept and slope vary between groups.
+```{r}
+tibble(x = seq(0,30, length.out=5), y = seq(0,45, length.out = 5)) %>% 
+  ggplot(aes(x,y))+
+  stat_function(aes(colour="population"),fun=linreg, args = list(intercept=lev1_mu, slope=lev1_slope), 
+                size=2)+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[1], slope=lev2_slope[1]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[2], slope=lev2_slope[2]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[3], slope=lev2_slope[3]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[4], slope=lev2_slope[4]))+
+  stat_function(aes(colour="group"),fun=linreg, args = list(intercept=lev2_mu[5], slope=lev2_slope[5]))+
+  labs(x="",y="", colour="", title = "Varying slopes, varying intercepts")+
+  scale_color_manual(values=c("red","skyblue"))+
+  theme(legend.position = "top")
+```
+
+
+# Why you should use hierarchical linear models?
+
+- *Improved estimates for repeated sampling.* When more than one observations arises from the same individual (or the the same cluester, e.g. school) single-level model is biased.
+- *Improved estimates for imbalance in sampling*. When some clusters are sampled more than others (e.g. class with 8 students vs. class with 30 students), hierarchical linear models cope with differing uncertainty across this samples.
+- *Estimates of variation*. If we want to model variation of some effects (e.g. whether our treatment has the same effect across countries), hierarchical models allow to do it explicitly.
+- *Avoid averaging, retain variation*. Frequently scholars pre-average some data (e.g. across different stimuli) to construct variables. Averaging removes variation and manufactures false confidence.
+
+# How to name such models?
+
+These models come with different names - depending on the field and author:
+- hierarchical linear models
+- multilevel models
+- mixed-effects models
+- random effects models
+
+# Applied example - survey data
+
+Lets load a simple dataset from a survey of Polish population.
+
+```{r}
+survey <- read_csv("pps.csv", na = "999")
+```
+
+In the dataset you can find variables describing: belief in Jewish conspiracy (`jc_mean`), perceived lack of control (`lack_control`), and the voivodship (region of Poland) where each participant lives (`woj`)
+```{r}
+survey %>% 
+  glimpse()
+```
+
+In Poland there are 16 voivodships. Below you can summarise frequencies of participants in the sample living in each voivodship. The frequencies are not equal, because they are proportional to population in each voivodship.
+
+```{r}
+survey %>% 
+  count(woj)
+```
+
+Below you can find mean belief in Jewish conspiracy and lack of control for each voivodship.
+
+```{r}
+survey %>% 
+  group_by(woj) %>% 
+  summarise(mean_JC = mean(jc_mean, na.rm=T),
+            mean_LC = mean(lack_control, na.rm=T))
+```
+
+We can also plot the relationship between both variables.
+```{r}
+survey %>% 
+  group_by(woj) %>% 
+  summarise(mean_JC = mean(jc_mean, na.rm=T),
+            mean_LC = mean(lack_control, na.rm=T)) %>% 
+  ggplot(aes(mean_LC, mean_JC))+
+  geom_point()+
+  geom_label(aes(label=woj), nudge_y = 0.06)+
+  labs(x="Mean lack of control", y="Mean belief in Jewish conspiracy")+
+  scale_x_continuous(limits = c(3.5,5.5))+
+  scale_y_continuous(limits =c (3,4.5))
+```
+
+We know that the data have some structure, thus we should not use simple regression analysis.
+We could aggregate the data to deal with this problem. 
+
+By aggregating over voivodships, we can remove the nonindenpendence issue. 
+However, we should be careful with drawing conclusions from such data. Do you know why?
+
+
+## `brms` formula for hierarchical models
+
+The `brms` formula for hierarchical models follows convention known from the package `lme4`.
+
+```
+outcome ~ ... + (... | cluster)
+```
+
+First, we have outcome variable. 
+Second, predictors for which we want to estimate population level effects. 
+Third, in the parenthesis, before `|` we have predictors for which we want to estimate group level effects. After `|` we put clustering variable.
+
+## Null model
+
+Lets start with a very basic model, where we our DV is regressed only on intercept.
+
+```
+outcome ~ 1 + (1 | cluster)
+```
+
+`1` in the fixed and random parts means that we want to estimate mean outcome both for the population and for separate clusters.
+
+
+Lets start with defining our prior distributions.
+```{r message=FALSE}
+library(brms)
+get_prior(jc_mean ~ 1 + (1 | woj),
+          data = survey)
+```
+
+Lets use a slightly narrower prior for the standard deviation of voivodship means.
+```{r}
+prior_null <- prior(student_t(4, 0, 1), class = sd)
+```
+
+Lets fit our null model.
+```{r}
+fit_null <- brm(jc_mean ~ 1 + (1 | woj),
+                data = survey,
+                prior = prior_null)
+```
+
+Lets print basic information about the model.
+
+```{r}
+fit_null
+```
+
+With such a model, we will usually want to estimate the coefficient known as intraclass correlation (ICC). 
+ICC denotes how strongly units in the same group resemble each other, or the average correlation of DV between subjects drawn from the same group.
+The formula for ICC is:
+$$
+ICC = \frac{\sigma^2_{between}}{\sigma^2_{between}+\sigma^2_{within}}
+$$
+Thus, ICC can also be interpreted as proportion of the total variance explained by the grouping variable.
+$\sigma_{between}$ in our model is 0.43, and $\sigma^2_{between}$ is thus 0.1849.
+$\sigma_{within}$ in our model is 1.04, and $\sigma^2_{between}$ is thus 1.0816.
+Thus, ICC is around 0.15.
+
+We can compute ICC with a function from the package `performance`.
+```{r}
+performance::icc(fit_null)
+```
+
+Now, we can compute group-level means for each voivodship.
+```{r message=FALSE}
+library(tidybayes)
+fit_null %>% 
+  spread_draws(b_Intercept, r_woj[woj, term]) %>% 
+  mutate(woj_level = b_Intercept + r_woj) %>% 
+  ggplot(aes(x = woj_level, y = woj))+
+  geom_halfeyeh()+
+  labs(x="Belief in Jewish conspiracy", y="")
+```
+
+Below, you will find the same graph, but with raw estimates of mean values for each voivodship.
+Note that they do not perfectly match. This effect is called Bayesian shrinkage.
+
+```{r}
+fit_null %>% 
+  spread_draws(b_Intercept, r_woj[woj, term]) %>% 
+  mutate(woj_level = b_Intercept + r_woj) %>% 
+  ggplot(aes(x = woj_level, y = woj))+
+  geom_vline(xintercept = survey %>% 
+               summarise(mjc =mean(jc_mean, na.rm=T)) %>% 
+               pull(mjc),
+             linetype =2, colour = "gray")+
+  geom_halfeyeh()+
+  geom_point(data=survey %>% 
+               group_by(woj) %>% 
+               summarise(woj_level = mean(jc_mean, na.rm=T)),
+             colour = "red", shape = 4, size = 4)+
+  labs(x="Belief in Jewish conspiracy", y="")
+```
+
+## Model with a fixed covariate
+
+Here, DV is regressed on some predictor. Note that, for now, the random part includes only random intercept.
+```
+outcome ~ 1+predictor + (1 | cluster)
+```
+or
+```
+outcome ~ predictor + (1 | cluster)
+```
+
+Before including a covariate lets standardize it. For increased interpretability, lets standardize its value around voivodship means (not the grand mean).
+
+```{r}
+survey <- survey %>% 
+  group_by(woj) %>% 
+  mutate(gc_lack_control = lack_control - mean(lack_control, na.rm=T) / sd(lack_control, na.rm=T)) %>% 
+  ungroup()
+```
+
+Lets check our prior.
+
+```{r}
+get_prior(jc_mean ~ gc_lack_control + (1 | woj),
+          data = survey)
+```
+
+We will use the same prior as before for sd of intercepts. Additionally, we will use weakly informative prior for our regression coefficients.
+```{r}
+prior_hlm <- prior(student_t(4, 0, 1), class = sd)+prior(normal(0, 1), class=b)
+```
+
+Lets fit out model.
+```{r}
+fit_fixed_cov <- brm(jc_mean ~ gc_lack_control + (1 | woj),
+                data = survey,
+                prior = prior_hlm)
+```
+
+Lets print the results.
+```{r}
+fit_fixed_cov
+```
+
+We draw the population level marginal effects.
+
+```{r}
+marginal_effects(fit_fixed_cov, "gc_lack_control")
+```
+
+And also, by setting `re_formula` to NULL, we can plot marginal effects that account group variability.
+```{r}
+marginal_effects(fit_fixed_cov, "gc_lack_control", re_formula = NULL)
+```
+
+Lets plot separate regression lines for each voivodship.
+
+```{r}
+survey %>% 
+  modelr::data_grid(gc_lack_control = modelr::seq_range(gc_lack_control, n = 11), woj) %>% 
+  add_fitted_draws(fit_fixed_cov) %>% 
+  ggplot(aes(x = gc_lack_control, y=.value, color = woj, fill=woj))+
+  stat_lineribbon(.width = .95, alpha = 1/4)+
+  labs(x="Lack of control (group-centered)", y="Belief in Jewish conspiracy (fitted)",
+       colour = "Voivodship", 
+       fill="Voivodship")
+```
+
+For greater clarity, lets choose only "the most interesting" voivodships.
+```{r}
+survey %>% 
+  modelr::data_grid(gc_lack_control = modelr::seq_range(gc_lack_control, n = 11), 
+            woj = c("podkarpackie", "zachodniopomorskie", "łódzkie")) %>% 
+  add_fitted_draws(fit_fixed_cov) %>% 
+  ggplot(aes(x = gc_lack_control, y=.value, color = woj, fill=woj))+
+  stat_lineribbon(.width = .95, alpha = 1/4)+
+  labs(x="Lack of control (group-centered)", y="Belief in Jewish conspiracy (fitted)",
+       colour = "Voivodship", 
+       fill="Voivodship")
+```
+
+## Model with a random covariate
+
+Here, DV is regressed on some predictor. The random part includes random intercept and random covariate.
+```
+outcome ~ 1 + predictor + (1 + predictor | cluster)
+```
+or
+```
+outcome ~ predictor + (predictor | cluster)
+```
+
+Lets fit our model. We can use the same prior as before.
+
+```{r}
+fit_random_cov <- brm(jc_mean ~ gc_lack_control + (gc_lack_control | woj),
+                data = survey,
+                prior = prior_hlm)
+```
+
+Lets print the results.
+```{r}
+fit_random_cov
+```
+
+You can see the correlation between group-level slope and intercept on the graph below.
+In voivodship with higher levels of belief in Jewish conspiracy, the relationship between lack of control and belief in Jewish conspiracy is weaker.
+```{r}
+fit_random_cov %>% 
+  spread_draws(b_Intercept,b_gc_lack_control, r_woj[woj, term]) %>% 
+  select(.draw, b_Intercept, b_gc_lack_control, woj, term, r_woj) %>% 
+  ungroup() %>% 
+  spread("term", "r_woj") %>% 
+  mutate(`Random intercept` = b_Intercept + Intercept,
+         `Random slope` = b_gc_lack_control + gc_lack_control) %>% 
+  select(.draw, woj, `Random intercept`, `Random slope`) %>% 
+  gather("term", "value",`Random intercept`:`Random slope`) %>% 
+  ggplot(aes(x=value, y=woj))+
+  geom_halfeyeh()+
+  facet_wrap(~term, scales = "free_x")+
+  labs(x="",y="")
+```
+
+We can also see this relationship here.
+```{r}
+survey %>% 
+  modelr::data_grid(gc_lack_control = modelr::seq_range(gc_lack_control, n = 11), 
+            woj) %>% 
+  add_fitted_draws(fit_random_cov) %>% 
+  ggplot(aes(x = gc_lack_control, y=.value, color = woj, fill=woj))+
+  stat_lineribbon(.width = .95, alpha = 1/4)+
+  labs(x="Lack of control (group-centered)", y="Belief in Jewish conspiracy (fitted)",
+       colour = "Voivodship", 
+       fill="Voivodship")
+```
+
+As before, we can choose and display only a subset of voivodships.
+```{r}
+survey %>% 
+  modelr::data_grid(gc_lack_control = modelr::seq_range(gc_lack_control, n = 11), 
+            woj = c("pomorskie", "mazowieckie", "podkarpackie")) %>% 
+  add_fitted_draws(fit_random_cov) %>% 
+  ggplot(aes(x = gc_lack_control, y=.value, color = woj, fill=woj))+
+  stat_lineribbon(.width = .95, alpha = 1/4)+
+  labs(x="Lack of control (group-centered)", y="Belief in Jewish conspiracy (fitted)",
+       colour = "Voivodship", 
+       fill="Voivodship")
+```
+
