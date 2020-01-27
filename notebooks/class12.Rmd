@@ -130,7 +130,7 @@ $$
 y^{rep} = \beta_0^j + \beta_1^j * x + \sigma^j
 $$
 
-Lets do it with our data. We observed x for 10 cases, from 1 to 10. For each case we make prediction regarding y, at the current posterior values. For simplicity, we take the mean of ys, to summarize prediction.
+Lets do it with our data. We observed x for 10 cases, with values from 1 to 10. For each case we make prediction regarding y, at the current posterior values. For simplicity, we take the mean of ys, to summarize prediction.
 
 ```{r}
 post_pred_mean <- function(a,b,s) {
@@ -159,7 +159,7 @@ We can compare density plots of posterior predicted outcome variable, to the obs
 pp_check(fit_random_cov, nsamples = 100)
 ```
 
-We can focus on some descriptive statistics, rather than on entire histogram/density plots.
+We can focus on specific descriptive statistics, rather than on entire histogram/density plots.
 
 Lets compare predicted and observed mean.
 ```{r}
@@ -212,7 +212,6 @@ Based on our criteria, we can accept that the model makes wrong predictions rega
 
 Lets refit the model with a fixed covariate. It will be used for comparative purposes.
 
-
 ```{r}
 fit_fixed_cov <- brm(jc_mean ~ gc_lack_control + (1 | woj),
                 data = survey,
@@ -245,7 +244,7 @@ bayes_R2(fit_fixed_cov)
 bayes_R2(fit_random_cov)
 ```
 
-You may know that there is one serious problem with $R^2$. By adding additional - even random - predictors, you can actually increase the proportion of explained variance up to 1.
+You may know that there is one serious problem with $R^2$. By adding predictors, you can increase the proportion of explained variance up to 1, even if none of the predictors make sense.
 
 This is a simple example from *Statistical Rethinking*, chapter 6.
 
@@ -304,7 +303,7 @@ plot_grid(linear, quadratic, cubic, fourth_d, fifth_d, sixth_d, ncol=2)
 Based on R2 you would probably choose the sixth-degree model? Yes?
 There are two problems with this decision:
 1. Are there any substantive reason to expect that the true relationship between body mass and brain volume is a sixth-degree polynomial?
-2. Imagine you discover a new species of Homo. Given that you know the body mass, would you be able to estimate the brain volume?
+2. Imagine you discover a new species of Homo. Given that you know its body mass, how accurate would be your estimates the brain volume (with sixth-degree model)?
 
 Adding new parameters increases accuracy of the in-sample prediction, but decreases accuracy of the out-sample prediction.
 
@@ -314,11 +313,11 @@ We would observe that:
 
 accuracy in the training sample < accuracy in the testing sample
 
-We could quantify (accuracy in the train sample - accuracy in the test sample) as a measure of overfit.
+We could quantify (accuracy in the train sample - accuracy in the test sample) as a measure of *overfit*.
 
 ## Comparing information criteria
 
-Luckilly, we do not always have to collect two samples. We can approximate a measure of overfit, and use it adjust the accuracy of the model based only on training sample. This is the basic idea behind *information criteria*.
+Luckilly, we do not have to collect two samples. We can approximate a measure of overfit, and use it adjust the accuracy of the model based only on the training sample. This is the basic idea behind *information criteria*.
 
 **accuracy in the testing sample** = *accuracy in the training sample* - *approximated overfit*
 
@@ -349,7 +348,9 @@ Define $V(y_i)$ as the variance of in the log-likelihood for observation *i* in 
 $$
 p_{WAIC} = \sum_{i=1}^NV(y_i)
 $$
-$p_{WAIC}$ is a measure of *effective number of parameters*. It measures how flexible the model is in fitting the training sample. More flexible models entail greater risk of overfitting.
+$p_{WAIC}$ is a measure of *effective number of parameters*. It measures how flexible the model is in fitting the training sample. More flexible models entail greater risk of overfitting. 
+
+$p_{WAIC}$ should be close to the actual number of parameters in a model. Higher or lower values may indicate misspecification (i.e. we included much predictors or we omitted some important predictors).
 
 
 WAIC is defined as:
@@ -371,12 +372,11 @@ fit_fixed_cov$criteria$waic
 ```
 
 Lets print WAIC for the model with random intercept and slope.
-
 ```{r}
 fit_random_cov$criteria$waic
 ```
 
-The second model is definitely more complex, than the first. However, even after accounting for the penalty WAIC for the more complex model is LOWER (**thus better**).
+The second model is definitely more complex than the first. However, even after accounting for the penalty, WAIC for the more complex model is LOWER (**thus better**).
 
 
 Lets print the difference of WAIC:
@@ -385,7 +385,7 @@ Lets print the difference of WAIC:
 loo_compare(fit_fixed_cov, fit_random_cov, criterion = "waic")
 ```
 
-The difference is small with respect to its standard error. Thus, we cannot be interely sure that the second model is better than the first.
+The difference is small with respect to its standard error. Thus, we cannot be entirely sure that the second model is better than the first.
 The difference should be at least twice its standard error.
 
 
