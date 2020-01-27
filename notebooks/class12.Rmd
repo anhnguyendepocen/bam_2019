@@ -1,0 +1,433 @@
+---
+title: "Class 12"
+output: html_notebook
+---
+
+# Hierarchical linear models - continued
+
+```{r message=FALSE}
+library(tidyverse)
+survey <- read_csv("pps.csv", na = "999")
+
+survey <- survey %>% 
+  group_by(woj) %>% 
+  mutate(gc_lack_control = lack_control - mean(lack_control, na.rm=T) / sd(lack_control, na.rm=T)) %>% 
+  ungroup()
+
+survey %>% 
+  glimpse()
+```
+
+
+## Model with a random covariate
+
+Here, DV is regressed on some predictor. The random part includes random intercept and random covariate.
+```
+outcome ~ 1 + predictor + (1 + predictor | cluster)
+```
+or
+```
+outcome ~ predictor + (predictor | cluster)
+```
+
+Lets fit our model. We can use the same prior as before.
+
+```{r message=FALSE}
+library(brms)
+prior_hlm <- prior(student_t(4, 0, 1), class = sd)+prior(normal(0, 1), class=b)
+
+fit_random_cov <- brm(jc_mean ~ gc_lack_control + (gc_lack_control | woj),
+                data = survey,
+                prior = prior_hlm)
+```
+
+Lets print the results.
+```{r}
+fit_random_cov
+```
+
+You can see the correlation between group-level slope and intercept on the graph below.
+In voivodship with higher levels of belief in Jewish conspiracy, the relationship between lack of control and belief in Jewish conspiracy is weaker.
+```{r}
+library(tidybayes)
+fit_random_cov %>% 
+  spread_draws(b_Intercept,b_gc_lack_control, r_woj[woj, term]) %>% 
+  select(.draw, b_Intercept, b_gc_lack_control, woj, term, r_woj) %>% 
+  ungroup() %>% 
+  spread("term", "r_woj") %>% 
+  mutate(`Random intercept` = b_Intercept + Intercept,
+         `Random slope` = b_gc_lack_control + gc_lack_control) %>% 
+  select(.draw, woj, `Random intercept`, `Random slope`) %>% 
+  gather("term", "value",`Random intercept`:`Random slope`) %>% 
+  ggplot(aes(x=value, y=woj))+
+  geom_halfeyeh()+
+  facet_wrap(~term, scales = "free_x")+
+  labs(x="",y="")
+```
+
+We can also see this relationship here.
+```{r}
+survey %>% 
+  modelr::data_grid(gc_lack_control = modelr::seq_range(gc_lack_control, n = 11), 
+            woj) %>% 
+  add_fitted_draws(fit_random_cov) %>% 
+  ggplot(aes(x = gc_lack_control, y=.value, color = woj, fill=woj))+
+  stat_lineribbon(.width = .95, alpha = 1/4)+
+  labs(x="Lack of control (group-centered)", y="Belief in Jewish conspiracy (fitted)",
+       colour = "Voivodship", 
+       fill="Voivodship")
+```
+
+As before, we can choose and display only a subset of voivodships.
+```{r}
+survey %>% 
+  modelr::data_grid(gc_lack_control = modelr::seq_range(gc_lack_control, n = 11), 
+            woj = c("pomorskie", "mazowieckie", "podkarpackie")) %>% 
+  add_fitted_draws(fit_random_cov) %>% 
+  ggplot(aes(x = gc_lack_control, y=.value, color = woj, fill=woj))+
+  stat_lineribbon(.width = .95, alpha = 1/4)+
+  labs(x="Lack of control (group-centered)", y="Belief in Jewish conspiracy (fitted)",
+       colour = "Voivodship", 
+       fill="Voivodship")
+```
+
+# Checking the validity of model
+
+Once you fit your model it is important to examine whether it works correctly.
+
+Do the inferences from the model make sense?
+
+We can conduct *external validation* using the model to make predictions about future data (*posterior predictive distribution*), and then collecting those data and comparing to their predictions.
+
+However, we can also use the model to make predictions about the current data, and then check whether replicated data generated under the model look similar to observed data.
+
+This approach is called *posterior predictive checking*.
+
+Posterior predictive distribution can be defined as:
+$$
+p(y^{rep}|y) = \int p(y^{rep}|\theta)p(\theta | y)d\theta
+$$
+
+For example suppose you have a dataset:
+```{r}
+df <- tibble(x = 1:10,
+       y = round(2+1.5*x + rnorm(10), 2))
+df
+```
+
+Then, you fit a linear regression to obtain posterior of the model parameters. Here you have only 100 samples, but usually you would have several thousands.
+
+```{r}
+post <- tibble(intercept = round(rnorm(100, 2, 0.1), 3),
+       slope = round(rnorm(100, 1.5, 0.1), 3),
+       sigma = round(rnorm(100, 1, 0.2), 3))
+post
+```
+
+Then for each posterior draw, you can calculate posterior prediction.
+
+$$
+y^{rep} = \beta_0^j + \beta_1^j * x + \sigma^j
+$$
+
+Lets do it with our data. We observed x for 10 cases, from 1 to 10. For each case we make prediction regarding y, at the current posterior values. For simplicity, we take the mean of ys, to summarize prediction.
+
+```{r}
+post_pred_mean <- function(a,b,s) {
+  mean(rnorm(10, a + b*(1:10), s))
+}
+post %>% 
+  rowwise() %>% 
+  mutate(mean_y_rep = post_pred_mean(intercept, slope, sigma)) -> post
+post
+```
+
+Now, we can plot predicted means. Red line denotes observed mean of y.
+
+```{r}
+post %>% 
+  ggplot(aes(x=mean_y_rep))+
+  geom_histogram(fill="skyblue", colour="black")+
+  geom_vline(xintercept = mean(df$y), colour="darkblue", size=2)
+```
+
+Lets use this approach to examine `fit_random_cov`.
+
+We can compare density plots of posterior predicted outcome variable, to the observed outcome variable.
+
+```{r}
+pp_check(fit_random_cov, nsamples = 100)
+```
+
+We can focus on some descriptive statistics, rather than on entire histogram/density plots.
+
+Lets compare predicted and observed mean.
+```{r}
+pp_check(fit_random_cov, type="stat", stat="mean")
+```
+
+Not lets compare predicted and observed standard deviation.
+```{r}
+pp_check(fit_random_cov, type="stat", stat="sd")
+```
+
+Or plot two statistics at the same time.
+```{r}
+pp_check(fit_random_cov, type="stat_2d")
+```
+
+What about minimum predicted and observed values?
+```{r}
+pp_check(fit_random_cov, type="stat", stat="min")
+```
+
+Or maximum predicted and observed values?
+```{r}
+pp_check(fit_random_cov, type="stat", stat="max")
+```
+
+Lets also check skewness.
+```{r}
+library(parameters)
+pp_check(fit_random_cov, type="stat", stat="skewness")
+```
+
+And kurtosis.
+```{r}
+pp_check(fit_random_cov, type="stat", stat="kurtosis")
+```
+
+Or any descriptive function we can implement in R. For example the range of values (i.e. maximum - minimum).
+```{r}
+range_width <- function(x) {
+  max(x) - min(x)
+}
+
+pp_check(fit_random_cov, type="stat", stat="range_width")
+```
+
+Based on our criteria, we can accept that the model makes wrong predictions regarding minimum and maximum values, or we can try to adjust our model.
+
+# Evaluating and comparing models
+
+Lets refit the model with a fixed covariate. It will be used for comparative purposes.
+
+
+```{r}
+fit_fixed_cov <- brm(jc_mean ~ gc_lack_control + (1 | woj),
+                data = survey,
+                prior = prior_hlm)
+```
+
+```{r}
+fit_fixed_cov
+```
+
+```{r}
+fit_random_cov
+```
+
+How to decide, whether to use a model with a fixed or random covariate?
+
+## Comparing R-squared
+
+R-squared is commonly defined as *a proportion of explained variance*. $R^2$ is easy to compute.
+
+$$
+R^2 = \frac{var(outcome) - var(residuals)}{var(outcome)} = 1 - \frac{var(residuals)}{var(outcome)}
+$$
+
+```{r}
+bayes_R2(fit_fixed_cov)
+```
+
+```{r}
+bayes_R2(fit_random_cov)
+```
+
+You may know that there is one serious problem with $R^2$. By adding additional - even random - predictors, you can actually increase the proportion of explained variance up to 1.
+
+This is a simple example from *Statistical Rethinking*, chapter 6.
+
+```{r}
+d = tibble(species = c("afarensis", "africanus", "habilis", "boisei", "rudolfensis", "ergaster", "sapiens"), 
+         brain   = c(438, 452, 612, 521, 752, 871, 1350), 
+         mass    = c(37.0, 35.5, 34.5, 41.5, 55.5, 61.0, 53.5))
+d
+```
+
+Now, lets plot this data, add polynomial terms, and see how adding this terms affect R2.
+
+```{r}
+library(cowplot)
+common_labs <- labs(x="body mass (kg)", y="brain volume (cc)")
+linear <- d %>% 
+  ggplot(aes(mass, brain))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 1))+
+  ggtitle("linear fit, R2 = 0.49")+
+  common_labs
+quadratic <- d %>% 
+  ggplot(aes(mass, brain))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2))+
+  ggtitle("quadratic fit, R2 = 0.54")+
+  common_labs
+cubic <- d %>% 
+  ggplot(aes(mass, brain))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 3))+
+  ggtitle("cubic fit, R2 = 0.68")+
+  common_labs
+fourth_d <- d %>% 
+  ggplot(aes(mass, brain))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 4))+
+  ggtitle("fourth degree, R2 = 0.81")+
+  common_labs
+fifth_d <- d %>% 
+  ggplot(aes(mass, brain))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 5))+
+  ggtitle("fifth degree, R2 = 0.99")+
+  common_labs
+sixth_d <- d %>% 
+  ggplot(aes(mass, brain))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 6))+
+  ggtitle("sixth degree, R2 = 1.00")+
+  common_labs
+
+plot_grid(linear, quadratic, cubic, fourth_d, fifth_d, sixth_d, ncol=2)
+```
+
+Based on R2 you would probably choose the sixth-degree model? Yes?
+There are two problems with this decision:
+1. Are there any substantive reason to expect that the true relationship between body mass and brain volume is a sixth-degree polynomial?
+2. Imagine you discover a new species of Homo. Given that you know the body mass, would you be able to estimate the brain volume?
+
+Adding new parameters increases accuracy of the in-sample prediction, but decreases accuracy of the out-sample prediction.
+
+Ideally, we would like to estimate predictive accuracy of our model using another sample from the same population. We would use first sample to *train* model, and the second sample to *test* model. This approach is called *cross-validation*.
+
+We would observe that:
+
+accuracy in the training sample < accuracy in the testing sample
+
+We could quantify (accuracy in the train sample - accuracy in the test sample) as a measure of overfit.
+
+## Comparing information criteria
+
+Luckilly, we do not always have to collect two samples. We can approximate a measure of overfit, and use it adjust the accuracy of the model based only on training sample. This is the basic idea behind *information criteria*.
+
+**accuracy in the testing sample** = *accuracy in the training sample* - *approximated overfit*
+
+Fist, information criteria are based on the likelihood calculated for each observation.
+
+```{r}
+set.seed(1234)
+tibble(x = sort(runif(50)),
+       y = 2+1.5*x+rnorm(50),
+       alpha = c(rep(0.5, 4), 1, rep(0.5, 10), 1, rep(0.5,34))) %>% 
+  ggplot(aes(x, y))+
+  geom_point(aes(alpha=alpha))+
+  geom_smooth(method="lm", se = F)+
+  guides(alpha=F)+
+  ggtitle("Compare...", "...which of the two highlighted dots is more probable given the model?")
+```
+
+
+$$
+lppd = \sum_{i=1}^NlogPr(y_i)
+$$
+
+The log-pointwise-predictive-density is the total across observations of the logarithm of the average likelihood of each observation.
+
+Now, we would like to approximate the overfit of the model and use it to adjust lppd. 
+Define $V(y_i)$ as the variance of in the log-likelihood for observation *i* in the sample. That is, we take log-likelihood of $y_i$ for each sample from the posterior distribution. Then:
+
+$$
+p_{WAIC} = \sum_{i=1}^NV(y_i)
+$$
+$p_{WAIC}$ is a measure of *effective number of parameters*. It measures how flexible the model is in fitting the training sample. More flexible models entail greater risk of overfitting.
+
+
+WAIC is defined as:
+
+$$
+WAIC = -2(lppd - p_{WAIC})
+$$
+
+
+Lets add WAIC (Widely Applicable Information Criterion or Watanabe-Akaike Information Criterion) to our models.
+```{r}
+fit_random_cov <- add_criterion(fit_random_cov, c("waic"))
+fit_fixed_cov <- add_criterion(fit_fixed_cov, c("waic"))
+```
+
+Lets print WAIC for the model with random intercept.
+```{r}
+fit_fixed_cov$criteria$waic
+```
+
+Lets print WAIC for the model with random intercept and slope.
+
+```{r}
+fit_random_cov$criteria$waic
+```
+
+The second model is definitely more complex, than the first. However, even after accounting for the penalty WAIC for the more complex model is LOWER (**thus better**).
+
+
+Lets print the difference of WAIC:
+
+```{r}
+loo_compare(fit_fixed_cov, fit_random_cov, criterion = "waic")
+```
+
+The difference is small with respect to its standard error. Thus, we cannot be interely sure that the second model is better than the first.
+The difference should be at least twice its standard error.
+
+
+## Bayes factor for model comparison
+
+Another approach to model comparison is using Bayes factors.
+
+Bayes factors tells us, how much one of the models is more plausible than the other model.
+
+To compute Bayes factor for models we have to update our fitted model objects.
+```{r}
+fit_fixed_cov <- update(fit_fixed_cov, save_all_pars=T)
+fit_random_cov <- update(fit_random_cov, save_all_pars=T)
+```
+
+Now, we can compare models with `bayesfactor_models` from `bayestestR`, or simply `bayes_factor` from `brms`. The former approach has a slightly nicer output.
+```{r}
+library(bayestestR)
+bayesfactor_models(fit_fixed_cov, fit_random_cov)
+```
+
+# Final exam
+
+## what to expect?
+
+- focus on practical aspects of Bayesian data analysis
+- how to fit Bayesian models covered during classes:
+  - multiple regression with interactions
+  - logistic regression
+  - multilevel regression
+- how to determine whether the effect of a predictor exists (intervals, probability of direction, equivalence test, Bayes factor for parameters)
+- how to plot marginal effects? how to plot and decompose interaction? 
+- how to check model validity? 
+- how to compare models?
+
+## how to prepare?
+
+- the best way it to go through class notebooks (6-12) and make sure you understand, what's going on
+- get your empirical paper or master thesis data, and try to reanalyze it using Bayesian approach
+- go through Kurz blog if you want to have a deeper insight in the models ![](https://bookdown.org/connect/#/apps/1850/access)
+
+## questions? doubts?
+
+
+
