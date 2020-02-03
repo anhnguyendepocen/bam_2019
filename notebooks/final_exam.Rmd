@@ -1,0 +1,144 @@
+---
+title: "Final exam"
+output: html_notebook
+---
+
+Run the code below to setup your R envirnoment to the exam.
+
+```{r}
+library(haven)
+library(tidyverse)
+library(brms)
+library(emmeans)
+
+df <- read_sav("roundPaper.sav")
+
+df %>% 
+  mutate(zsjus = (sjus - mean(sjus, na.rm=T))/sd(sjus, na.rm=T),
+         zcm = (cm - mean(cm, na.rm=T))/sd(cm, na.rm=T),
+         zround = (round - mean(round, na.rm=T))/sd(round, na.rm=T)) -> df
+df %>% 
+  mutate(voting = factor(polit1C, levels=1:3, labels=c("right","centerleft","nonvoting"))) -> df
+```
+
+# Task 1
+
+Construct a prior object
+
+```{r}
+prior <- prior()
+```
+
+Fit a model
+
+```{r}
+fit1 <- brm()
+```
+
+Print the model
+
+```{r}
+fit1
+```
+
+Conduct posterior predictive checks
+
+i.
+```{r}
+pp_check()
+```
+
+ii.
+```{r}
+pp_check()
+```
+
+iii.
+```{r}
+pp_check()
+```
+
+iv.
+```{r}
+pp_check()
+```
+
+v.
+```{r}
+pp_check()
+```
+
+Fit a model with Student t family
+
+```{r}
+fit1_alt <- brm()
+```
+
+Print the alternative model
+
+```{r}
+fit1_alt
+```
+
+## Task 2
+
+Construct a prior object or use the prior from previous task
+
+```{r}
+prior <- prior()
+```
+
+Fit a model with interaction
+
+```{r}
+fit2_int <- brm()
+```
+
+Fit a model without interaction
+
+```{r}
+fit2_non_int <- brm()
+```
+
+Compute WAIC for the model with interaction
+
+```{r}
+fit2_int <- add_criterion()
+```
+
+Print WAIC for the model with interaction
+
+```{r}
+fit2_int$waic
+```
+
+Compute WAIC for the model without interaction
+
+```{r}
+fit2_non_int <- add_criterion()
+```
+
+Print WAIC for the model without interaction
+
+```{r}
+fit2_non_int$waic
+```
+
+Compute the difference of WAICs
+
+```{r}
+loo_compare()
+```
+
+Plot the interaction
+
+```{r}
+marginal_effects()
+```
+
+Compute simple slopes for the interaction
+
+```{r}
+emtrends()
+```
+
