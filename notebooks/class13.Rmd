@@ -1,0 +1,264 @@
+---
+title: "Class 13"
+output: html_notebook
+---
+
+# Model comparison with Bayes factor
+
+Lets prepare the R environment for this class
+```{r message=FALSE}
+library(tidyverse)
+
+s3 <- read_csv("study3.csv", na = "-999")
+s3 <- s3 %>% 
+  mutate(gender = factor(gender, levels = c("k","m"), labels = c("female","male")),
+         cond = factor(cond))
+
+s3 %>% 
+  select(cond, gender, jc_mean) %>% 
+  glimpse()
+```
+
+Run the model as soon as as possible, it will take some time to fit all of them.
+Note that we have increased `iter` to 20000. Moreover, we have set the argument `save_all_pars` to TRUE.
+
+```{r message=FALSE}
+library(bayestestR)
+contrasts(s3$cond) <- contr.bayes
+prior5 <- prior(normal(0, 1), class = b)
+fit_null <- brm(jc_mean ~ 1,
+                data = s3,
+                iter = 20000,
+                save_all_pars = T)
+
+fit_cond <- brm(jc_mean ~ cond,
+                data = s3,
+                prior = prior5,
+                iter = 20000,
+                save_all_pars = T)
+
+fit_gender <- brm(jc_mean ~ gender,
+                data = s3,
+                prior = prior5,
+                iter = 20000,
+                save_all_pars = T)
+
+fit_both <- brm(jc_mean ~ gender + cond,
+                data = s3,
+                prior = prior5,
+                iter = 20000,
+                save_all_pars = T)
+
+fit_both_int <- brm(jc_mean ~ gender * cond,
+                data = s3,
+                prior = prior5,
+                iter = 20000,
+                save_all_pars = T)
+```
+
+
+## Bayes factor for model comparison
+
+Last week, we have focused on *information criteria*.
+Another approach to model comparison is using Bayes factors.
+
+Recall the Bayes theorem:
+$$
+p(\theta | \mathcal{D}) = \frac{p(\mathcal{D} | \theta) \times p(\theta)}{p(\mathcal{D})}
+$$
+
+There is one important part of this equations that is omitted above. 
+
+$$
+p(\theta | \mathcal{D, M}) = \frac{p(\mathcal{D} | \theta, \mathcal{M}) \times p(\theta|\mathcal{M})}{p(\mathcal{D | \mathcal{M}})}
+$$
+
+$\mathcal{M}$ refers to the chosen model. This implies, that our conclusions are valid only if we accept that the model we have chosen is correct. Perhaps, a different model may lead us to different conclusions.
+
+Lets focus on the denominator part. The probability of the same date may differ depending on the chosen model.
+
+$$
+p(\mathcal{D} | \mathcal{M}_1) \neq p(\mathcal{D} | \mathcal{M}_2)
+$$
+
+Thus, lets define K as:
+
+$$
+K = \frac{p(\mathcal{D} | \mathcal{M}_1)}{p(\mathcal{D} | \mathcal{M}_2)}
+$$
+
+K informs us how much more probable the data are given model 1 in comparison to model 2. K is usually referred to as Bayes factor.
+
+But such an interpretation is not entirely Bayesian. Lets use Bayes theorem, to get more insight.
+
+$$
+p(\mathcal{M}_1 | \mathcal{D}) = \frac{p(\mathcal{D} | \mathcal{M}_1) \times p(\mathcal{M}_1)}{p(\mathcal{D})}
+$$
+
+Thus:
+$$
+\frac{p(\mathcal{M}_1 | \mathcal{D})}{p(\mathcal{M}_2 | \mathcal{D})} = \frac{p(\mathcal{D} | \mathcal{M}_1)}{p(\mathcal{D} | \mathcal{M}_2)} \times \frac{p(\mathcal{M}_1)}{p(\mathcal{M}_2)}
+$$
+
+Note that the part in the middle is the Bayes factor as defined above.
+
+$$
+\frac{p(\mathcal{M}_1 | \mathcal{D})}{p(\mathcal{M}_2 | \mathcal{D})} = K \times \frac{p(\mathcal{M}_1)}{p(\mathcal{M}_2)}
+$$
+
+The part on the left is the ratio of postierors. The part on the right is the ratio of priors.
+
+Therefore Bayes factor (K) informs, how much our confidence in superiority of one of the models (or hypothesis) over another increased after seeing the data.
+
+Now, we can compare models with `bayesfactor_models` from `bayestestR`, or simply `bayes_factor` from `brms`. The former approach has a slightly nicer output.
+```{r}
+bfModels <- bayesfactor_models(fit_null, fit_cond, fit_gender, fit_both, fit_both_int)
+```
+
+Lets print the results.
+```{r}
+bfModels
+```
+
+Or you can use a piechart to compare values. But beware that such a way may be misleading.
+```{r}
+bfModels %>% 
+  plot()
+```
+
+We can also compare models that include a specific parameter to the remaining models that does not include this parameter.
+```{r}
+bfInclusion <- bayesfactor_inclusion(bfModels, match_models = T)
+bfInclusion
+```
+
+
+# Model averaging
+
+In Bayesian approach we treat data as fixed and parameters as unknown and thus uncertain.
+
+Another source of uncertainty stems from the decision which model to choose. We usually don't know which is correct, even after model fitting and model comparison. The choice of the model is subjective.
+
+The basic idea of Bayesian approach is to average over the uncertain factors.
+
+Thus, we can also average our conclusions over a set of models. 
+
+To make this averaging more informed, we will use a weighted mean based on some precomputed criterion (information criterion or Bayes factor).
+
+Lets compare two of the previous models with WAIC.
+
+For a model without interaction.
+```{r}
+fit_both <- add_criterion(fit_both, criterion = "waic")
+fit_both$waic
+```
+
+For a model with interaction.
+```{r}
+fit_both_int <- add_criterion(fit_both_int, criterion = "waic")
+fit_both_int$waic
+```
+
+Now, for example, we can see predicted cell means fitted with two of the models.
+```{r}
+library(modelr)
+post_ave <- pp_average(fit_both, fit_both_int,
+                       newdata = s3 %>% 
+                        data_grid(cond, gender),
+                       method = "fitted")
+```
+
+
+Lets plot the results. 
+```{r}
+s3 %>% 
+  data_grid(cond, gender) %>% 
+  bind_cols(post_ave %>% 
+              as.data.frame()) %>% 
+  ggplot(aes(x=cond, y=Estimate, colour = gender))+
+  geom_point(position = position_dodge(width=.2))+
+  geom_errorbar(aes(ymin=`Q2.5`, ymax=`Q97.5`), width = .2,
+                position = position_dodge(width = .2))
+```
+
+
+# Wrap-up
+
+
+## Bayesian models are about uncertainty
+
+While the frequentist approach treats almost every part of modeling as fixed (only data are random),
+
+Bayesian approach seeks for randomness, and thus uncertainty, in every part of modeling (and treats data as given and thus fixed).
+
+In Bayesian approach we can estimate uncertainty related to:
+
+- parameters
+- measurement error
+- missing data
+- choosen model
+- and every decision the resercher takes
+
+## What we have covered during this class
+
+- What is Bayesian approach? Basic concepts.
+- The basics of using `brms`
+- Bayesian linear models
+  - with one or multiple predictors
+  - with continuous or categorical predictors
+  - with or without interaction
+- Bayesian generalized linear models
+  - with a binary outcome variable (logistic regression)
+  - robust linear regression (with Student t distribution)
+  - using other families is straightforward
+- Bayesian hierarchical models
+  - with panel data grouped within clusters (e.g., voivodships)
+  - this approach can also be used when individuals are treated as grouping factor (i.e., within-subject comparisons)
+- Model building
+  - model checking with posterior predictive checks
+  - model evaluation, model comparison, and model averaging
+
+## What we have not covered
+
+- Specific families or families rarely used in psychological research
+- Dealing with missing data
+- Autocorrelation of residuals: spatial models and time series
+- Censoring and truncation
+- Categorical outcome and ordinal models
+- Multivariate outcomes and structural equation modeling
+- Latent variable modeling (will be available in `brms` 3.0; is currently available in `blavaan`)
+- Smooth regression and Gaussian process
+
+## How to report Bayesian analysis
+
+- Describe your model conceptually
+- Include information about any transformations made before model fitting
+- Describe justify your assumptions
+  - the choice of the family
+  - the choice of prior distributions
+- Include technical details about MCMC procedure - briefly
+- Evaluate and compare models - usually it is good to fit and compare several models
+- Describe the strategy you have taken when deciding whether an effect exists or not
+- Present your posterior estimates
+- Describe conclusions you made based on your model and posterior estimates
+- Use plots when possible - make sure you have included graphical depiction of uncertainty
+- Remember that the main aim of any statistical analysis is to justify your reasoning, not to replace it.
+
+## Where to go from here
+
+- Unfortunately, classes on Bayesian modeling are still rare.
+- Observe Paul Buerkner's blog ![](https://paul-buerkner.github.io/blog/brms-blogposts/)
+- Observe Andrew Gelman's blog ![](https://statmodeling.stat.columbia.edu)
+- Make sure to re-read Statistical Retinking
+- And then maybe try: ![](https://www.amazon.com/Bayesian-Analysis-Chapman-Statistical-Science/dp/1439840954)
+- Be a part of community; for example observe and ask questions on ![](https://discourse.mc-stan.org)
+- Psychological Methods frequently publishes articles on Bayesian analysis; beware that majority of this articles focuses on Bayes factor
+
+## Questions, comments?
+
+
+
+
+
+
+
